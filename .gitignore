@@ -1,2 +1,6 @@
 *.html
 /*_files
+
+# very big file
+data/CBS_dataset_v1.0.rds
+data/us_speeches.csv
