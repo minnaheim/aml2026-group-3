@@ -17,7 +17,7 @@ Is the current information set that we have the same as the (communicated) infor
 
 1. **Input**
   - Macro Data (i.e. CPI, unemployment rate, monthly exchange rates)
-  - Fed Speeches (embedded via FinBERT or [Cental Bank RoBERTa](https://github.com/Moritz-Pfeifer/CentralBankRoBERTa) and then as Index?)
+  - Fed Speeches (embedded via [FOMC-RoBERTa]^(https://huggingface.co/gtfintechlab/FOMC-RoBERTa), [FinBERT]^(https://arxiv.org/abs/1908.10063) or [Cental Bank RoBERTa](https://github.com/Moritz-Pfeifer/CentralBankRoBERTa) and then as Index?)
 2. **Output**
   - predicted macro variables 
   - SSM hidden state as an index for another model?
@@ -59,3 +59,4 @@ Is the current information set that we have the same as the (communicated) infor
 #### Sources 
 
 - https://arxiv.org/abs/2506.22763
+- https://www.alexandria.unisg.ch/server/api/core/bitstreams/1d94cc0d-30b9-4d0d-9131-8e8c20c46837/content (finetuning FinBERT to FOMC minutes)
