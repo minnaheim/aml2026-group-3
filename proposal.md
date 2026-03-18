@@ -1,5 +1,6 @@
-# AML Proposal: Group 03
+# AML Proposal: Group 03 -- WORK IN PROGRESS
 
+*What we would like to discuss is in the last section. We have two possible ideas which we both discuss below.*
 
 ## Problem Setting 
 
@@ -12,29 +13,54 @@ The FOMC consists of 19 members: seven members of the Board of Governors and 12 
 
 The recent literature has frequently discussed whether the Fed possesses **superior information**. This can refer either to information that is not generally available to the public or to a better processing of the publicly available information. We examine this question from a forecasting perspective. Can we extract information from Fed speeches that goes beyond information from publicly available data and use it to improve forecasts of macroeconomic conditions? If so, this would suggest that the Fed does indeed possess superior information. If we were to find such an effect, it would not fall under the Lucas critique: instead, it would successfully show that the Fed uses Forward Guidance to align market expectations with its monetary policy goals.
 
+**Research Question: Do Fed Speeches contain information useful to forecast macroeconomic indicators?**
+
+## Idea 1: Using SSMs
+
 **Formal Setting**:
 
 Is the current information set that we have the same as the (communicated) information set of the Federal Reserve (Fed)? Meaning, does the Fed communicate more than what is already publicly available? If yes, including their communication in forecasting can improve the forecasting of Macro Variables.
 
 1. **Input**
-  - Macro Data (i.e. CPI, unemployment rate, monthly exchange rates)
+  - Macroeconomic Data: CPI, unemployment rate, monthly exchange rates against Yen, GBP, EUR (these are variables typically used in the literature)
   - Fed Speeches 
-    - embedded via FOMC-RoBERTa^[https://huggingface.co/gtfintechlab/FOMC-RoBERTa], FinBERT^[https://arxiv.org/abs/1908.10063] or [Cental Bank RoBERTa](https://github.com/Moritz-Pfeifer/CentralBankRoBERTa)
-    - these BERT embeddings only use fixed token size as input (i.e. 512) -> so after cleaning, we just take the first 512 tokens?
-    - post-embeddings, do we turn these embedded texts at time points into monthly averaged index (?)
+    - Embedded via [FOMC-RoBERTa](https://huggingface.co/gtfintechlab/FOMC-RoBERTa), [FinBERT](https://arxiv.org/abs/1908.10063) or [Cental Bank RoBERTa](https://github.com/Moritz-Pfeifer/CentralBankRoBERTa)
+    - TBD: BERT embeddings only use fixed token size as input (i.e. 512) -> so after cleaning, we just take the first 512 tokens?
+    - TBD: Post-embeddings, do we turn these embedded texts at time points into monthly averaged index (?)
 2. **Output**
-  - predicted macro variables 
+  - Forecasts of macroeconomic variables (CPI, ...)
   - SSM hidden state as an index for another model?
 3. **Model**
 
   - State Space Model:
-    - Dynamic Factor SSM^[see this introduction: https://cran.r-project.org/web/packages/dfms/vignettes/dynamic_factor_models.pdf or this book: https://www.princeton.edu/~mwatson/papers/Stock_Watson_HOM_Vol2.pdf] (very econ oriented)
-    - Time varying parameter SSM (very econ oriented)
+    - [Dynamic Factor SSM](https://cran.r-project.org/web/packages/dfms/vignettes/dynamic_factor_models.pdf) or [see this book](https://www.princeton.edu/~mwatson/papers/Stock_Watson_HOM_Vol2.pdf) which is very econonomics oriented
+    - Time varying parameter SSM (very economics oriented)
   <!-- - Bayesian SSM^[See KOF PhD thesis on Bayesian SSMs: https://www.research-collection.ethz.ch/server/api/core/bitstreams/da15bb15-9e0e-43bf-b329-df754eb81510/content] -->
-  - Alternatively: [Forecasting using Transformers](https://www.sciencedirect.com/science/article/pii/S0169207021000637)
+
+
+## Idea 2: Using Temporal Fusion Transformer (TFT)
+
+Is the current information set that we have the same as the (communicated) information set of the Federal Reserve (Fed)? Meaning, does the Fed communicate more than what is already publicly available? If yes, including their communication in forecasting can improve the forecasting of Macro Variables.
+
+1. **Input**
+  - Macroeconomic Data: CPI, unemployment rate, monthly exchange rates against Yen, GBP, EUR (these are variables typically used in the literature)
+  - Fed Speeches 
+    - Alignment to *next* inflation (...) release data; no look ahead to ensure no data leakage
+    - Extract embeddings from [FOMC-RoBERTa](https://huggingface.co/gtfintechlab/FOMC-RoBERTa), [FinBERT](https://arxiv.org/abs/1908.10063) or [Cental Bank RoBERTa](https://github.com/Moritz-Pfeifer/CentralBankRoBERTa)
+    - Ideally fine-tune the model used for embedding first on a proxy task (e.g., predict fed funds direction at next meeting, so hike/hold/cut)
+    - Then: Dimensionality Reduction
+  - Static features (speaker characteristics) from feature Engineering: we have access to a wide variety of speaker and institution features (Lustenberger, Rossi and Zeitz, Central Bank Communication: New Data and Stylized Facts From a Century of Fed Speeches, forthcoming as SNB Working Paper, 2026.)
+2. **Output**
+  - Forecasts of macroeconomic variables (CPI, ...)
+3. **Model**
+
+  - [Forecasting using Transformers](https://www.sciencedirect.com/science/article/pii/S0169207021000637)
+  - [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363)
+
+
 
 ## Evaluation Protocol
-- Cross-Validation (n-folds dep. on available data)
+- Cross-Validation (n-folds dep. on available data, *tbd since we use temporal data*)
 - Error Metrics:
   - Mean RMSE (over all folds)
   - Mean Average Error
@@ -42,17 +68,28 @@ Is the current information set that we have the same as the (communicated) infor
 - Use of Vintages of Macro Variables^[We assume Fed Speeches are unrevised]
 - Horizon
   - for *Monthly* Variables (CPI, unemployment rate, exchange rates): 1,6,12
-  - for *Quarterly* Variables (GDP): 1,4 
+  - for *Quarterly* Variables (GDP): 1,4
+ 
+
 
 ## Hyperparameter Tuning
-- tbd. based on SSM use
+- tbd. based on SSM/TFT use
 
 ## Machine Learning Benchmark
-- tbd. 
+- tbd.
+
+- Model itself without text embeddings (do we improve forecasts or do we introduce noise?)
 
 ## Statistical Benchmark
 - Stationarity Checks 
 - AR(1) or AR(2)
+
+
+## Our Questions / To Discuss
+
+In class, we saw that we will discuss SSMs such as Mamba. Dynamic Factor SSM are particularly useful for economic datasets as it accounts for the i) short time dimension (total length and data frequency) and ii) potentially many different time series. However, we are not certain if this fits the exercise requirements. 
+
+Alternatively, TFTs would likely be particularly useful for our research question. However, we are not certain if this fits the exercise requirements.
 
 <!-- 
 ### Questions to ask 
