@@ -15,6 +15,44 @@ The recent literature has frequently discussed whether the Fed possesses **super
 
 **Research Question: Do Fed Speeches contain information useful to forecast macroeconomic indicators?**
 
+## Formal Setting
+
+We define $\boldsymbol{X}\in \mathbb{R}^{T\times n}$ as a matrix of $n$ variables observed over $T$ time periods where $\boldsymbol{X}^{(t)}\in \mathbb{R}^{t\times n}$ is a truncation of $\boldsymbol{X}$ up to $t\leq T$.
+Let there be an information set defined as 
+
+$$\mathcal{I}_t^{\text{public}} = \\{ \boldsymbol{X}^{(t)} \in \mathbb{R}^{t\times n}: \boldsymbol{X} \text{ observable to the public at } t \\}$$
+
+which reflects the information the general public such as financial markets has available at time $t$. Define the information set by the Fed as
+
+$$\mathcal{I}_t^{\text{fed}} = \mathcal{I}\_t^{\text{public}} \cup \mathcal{I}_t^{\text{fed, excl}}$$
+
+ where $\mathcal{I}\_t^{\text{fed, excl}}$ measures any private ("superior") information the Fed possesses. If $\mathcal{I}\_t^{\text{fed, excl}} = \emptyset$, then the Fed does not possess superior information and $\mathcal{I}\_t^{\text{fed}} = \mathcal{I}\_t^{\text{public}}$. The Fed can communicate with the public through some speech $s_{kt}$ which denotes the $k$-th speech at time $t$. Then, the set of all speeches given up to time $T$ is defined by
+
+$$ \mathcal{S} = \\{s_{kt}: k = 1, ..., K_t; t = 1, ..., T\\}.$$
+
+The Fed uses speeches $\mathcal{S}$ as a **forward guidance** mechanism to influence $\mathcal{I}_t^{\text{public}}$. If $\mathcal{I}_t^{\text{fed, excl}} \neq \emptyset$, the Fed communicates its superior information through $s\_{kt}$.
+However, Fed communication is complex and not perfectly interpretablle. Define a *comprehension operator* $\mathcal{C}(\dot)$ such that the public extracts from a speech $s\_{kt}$:
+
+$$\mathcal{C}(s\_{kt}) \subseteq \mathcal{I}_t^{\text{fed, excl}} $$
+
+where the wedge $\mathcal{I}_t^{\text{fed, excl}} \setminus \mathcal{C}(s\_{kt}) \neq \emptyset$ reflects imperfect public understanding. With perfect comprehension, $\mathcal{C}(s\_{kt}) = \mathcal{I}_t^{\text{fed,  excl}}$, eliminating the wedge such that $\mathcal{I}_t^{\text{fed}} = \mathcal{I}_t^{text{public}}$.
+Thus, a speech $s\_{kt}$ reveals a signal $\sigma$ about future states of the world $\omega\_{t+h}$ at some future horizon $h > 0$:
+
+$$s\_{kt} \supseteq \sigma(\omega\_{t+h})$$
+
+We aim to extract some signal $\hat{\sigma}(s\_{kt})$ from a speech $s\_{kt}$ and forecast future macroeconomic variables over horizons $h\in\\{1,..., H\\}$. Let $\boldsymbol{x}_{t+h} \in \mathbb{R}^n$ denote the vector of macroeconomic variables at horizon $h$ which constitutes the forecast target $\omega\_{t+h} := \boldsymbol{x}^{(j)}\_{t+h}$ for some variable $j$. We index the variables to be forecast from some subset $j\in J \subseteq \\{1, ..., n\\}$. Then, the forecasting problem reads as
+
+$$\hat{\boldsymbol{x}}^{(j)}\_{t+h} = f \left( \boldsymbol{X}^{(t)},  \hat{\sigma}(s\_{kt}) \right)$$
+
+where $f$ denotes a deep learning forecasting model described below. 
+Then, the extracted signal improves forecast accuracy over forecasts not incorporating signals from Fed speeches, i.e., $\hat{\boldsymbol{x}}\_{t+h} \succ \hat{\boldsymbol{x}}_{t+h}^{text{public}}$ if and only if 
+
+1. $\mathcal{I}_t^{\text{fed, excl}} \neq \emptyset$: the Fed possesses superior information
+2. $\hat{\sigma}(s\_{kt}) \neq \emptyset$: the speech reveals a signal
+3. $\mathcal{I}_t^{\text{fed, excl}} \setminus \mathcal{C}(s\_{kt}) \neq \emptyset$: the public does not fully incorporate this signal.
+
+where $\hat{\boldsymbol{x}}\_{t+h} = f \left( \boldsymbol{X}^{(t)},  \hat{\sigma}(s\_{kt}) \right)$ and $\hat{\boldsymbol{x}}_{t+h}^{\text{public}} = f \left( \boldsymbol{X}^{(t)}) \right)$ and $\succ$ denotes superiority under some loss function $\mathcal{L}$.
+
 ## Idea 1: Using SSMs
 
 **Formal Setting**:
