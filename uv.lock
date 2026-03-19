@@ -10,10 +10,11 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "aml-cb-communication-forecasting"
+name = "aml2026-group-3"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "fredapi" },
     { name = "ipykernel" },
     { name = "numpy" },
     { name = "pandas" },
@@ -25,6 +26,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fredapi", specifier = ">=0.5.2" },
     { name = "ipykernel", specifier = ">=7.2.0" },
     { name = "numpy", specifier = ">=2.4.3" },
     { name = "pandas", specifier = ">=3.0.1" },
@@ -225,6 +227,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/b8/00651a0f559862f3bb7d6f7477b192afe3f583cc5e26403b44e59a55ab34/filelock-3.25.2.tar.gz", hash = "sha256:b64ece2b38f4ca29dd3e810287aa8c48182bbecd1ae6e9ae126c9b35f1382694", size = 40480 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/a5/842ae8f0c08b61d6484b52f99a03510a3a72d23141942d216ebe81fefbce/filelock-3.25.2-py3-none-any.whl", hash = "sha256:ca8afb0da15f229774c9ad1b455ed96e85a81373065fb10446672f64444ddf70", size = 26759 },
+]
+
+[[package]]
+name = "fredapi"
+version = "0.5.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6f/3c/e9281ecda4c6ee5c7d50a4bcf00dc5df1a7ff325e604c9b9510c5bdd8514/fredapi-0.5.2.tar.gz", hash = "sha256:405ca048abed4207d93dbc9b7ee8c46d6b473483650323e2f1c094af83d4b247", size = 14735 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/64/1db43417cf7ed430f104a347126b5260a1724ee9a1b7d0b1622262c9c4df/fredapi-0.5.2-py3-none-any.whl", hash = "sha256:961817ec8d70e58886ff7302d3dda908614ad99f77831a59833c4fc3f6150155", size = 11854 },
 ]
 
 [[package]]
