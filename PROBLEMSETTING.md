@@ -31,7 +31,7 @@ $$\mathcal{I}_t^{\text{fed}} = \mathcal{I}\_t^{\text{public}} \cup \mathcal{I}_t
 $$ \mathcal{S} = \\{s_{kt}: k = 1, ..., K_t; t = 1, ..., T\\}.$$
 
 The Fed uses speeches $\mathcal{S}$ as a **forward guidance** mechanism to influence $\mathcal{I}_t^{\text{public}}$. If $\mathcal{I}_t^{\text{fed, excl}} \neq \emptyset$, the Fed communicates its superior information through $s\_{kt}$.
-However, Fed communication is complex and not perfectly interpretablle. Define a *comprehension operator* $\mathcal{C}(\dot)$ such that the public extracts from a speech $s\_{kt}$:
+However, Fed communication is complex and not perfectly interpretable. Define a *comprehension operator* $\mathcal{C}(\dot)$ such that the public extracts from a speech $s\_{kt}$:
 
 $$\mathcal{C}(s\_{kt}) \subseteq \mathcal{I}_t^{\text{fed, excl}} $$
 
@@ -53,7 +53,7 @@ Then, the extracted signal improves forecast accuracy over forecasts not incorpo
 
 where $\hat{\boldsymbol{x}}\_{t+h} = f \left( \boldsymbol{X}^{(t)},  \hat{\sigma}(s\_{kt}) \right)$ and $\hat{\boldsymbol{x}}_{t+h}^{\text{public}} = f \left( \boldsymbol{X}^{(t)}) \right)$ and $\succ$ denotes superiority under some loss function $\mathcal{L}$.
 
-## Idea 1: Using SSMs
+<!-- ## Idea 1: Using SSMs
 
 **Formal Setting**:
 
@@ -73,12 +73,14 @@ Is the current information set that we have the same as the (communicated) infor
   - State Space Model:
     - [Dynamic Factor SSM](https://cran.r-project.org/web/packages/dfms/vignettes/dynamic_factor_models.pdf) or [see this book](https://www.princeton.edu/~mwatson/papers/Stock_Watson_HOM_Vol2.pdf) which is very econonomics oriented
     - Time varying parameter SSM (very economics oriented)
-  <!-- - Bayesian SSM^[See KOF PhD thesis on Bayesian SSMs: https://www.research-collection.ethz.ch/server/api/core/bitstreams/da15bb15-9e0e-43bf-b329-df754eb81510/content] -->
+  - Bayesian SSM^[See KOF PhD thesis on Bayesian SSMs: https://www.research-collection.ethz.ch/server/api/core/bitstreams/da15bb15-9e0e-43bf-b329-df754eb81510/content] -->
 
 
-## Idea 2: Using Temporal Fusion Transformer (TFT)
+<!-- ## Idea 2: Using Temporal Fusion Transformer (TFT) -->
 
-Is the current information set that we have the same as the (communicated) information set of the Federal Reserve (Fed)? Meaning, does the Fed communicate more than what is already publicly available? If yes, including their communication in forecasting can improve the forecasting of Macro Variables.
+## Model 
+
+<!-- Is the current information set that we have the same as the (communicated) information set of the Federal Reserve (Fed)? Meaning, does the Fed communicate more than what is already publicly available? If yes, including their communication in forecasting can improve the forecasting of Macro Variables. -->
 
 1. **Input**
   - Macroeconomic Data: CPI, unemployment rate, monthly exchange rates against Yen, GBP, EUR (these are variables typically used in the literature)
@@ -90,10 +92,14 @@ Is the current information set that we have the same as the (communicated) infor
   - Static features (speaker characteristics) from feature Engineering: we have access to a wide variety of speaker and institution features (Lustenberger, Rossi and Zeitz, Central Bank Communication: New Data and Stylized Facts From a Century of Fed Speeches, forthcoming as SNB Working Paper, 2026.)
 2. **Output**
   - Forecasts of macroeconomic variables (CPI, ...)
-3. **Model**
 
-  - [Forecasting using Transformers](https://www.sciencedirect.com/science/article/pii/S0169207021000637)
-  - [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363)
+
+Due to the nature of our forecasting task, such as the heterogeneity of our forecasting inpts (irregular frequency of (embedded) speeches, monthly and quarterly macro variables, and (potentially) financial variables which are high frequency) we need to choose a model which can handle these different kinds of inputs. 
+
+Moreover, due to our field of application - economics, we need to be able to interpret our results reliably, and not have our model be a 'black-box', where models are just complex interactions with many parameters. 
+
+Because of theser two central problems, we decided to use a Temporal Fusion Transformer, based on the paper: [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363), for this forecasting task. 
+
 
 
 
@@ -111,7 +117,7 @@ Is the current information set that we have the same as the (communicated) infor
 
 
 ## Hyperparameter Tuning
-- tbd. based on SSM/TFT use
+- As seen in the [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363) paper, where the hyperparameter optimisation is conducted via random search, we will do so too. 
 
 ## Machine Learning Benchmark
 - tbd.
@@ -128,6 +134,8 @@ Is the current information set that we have the same as the (communicated) infor
 In class, we saw that we will discuss SSMs such as Mamba. Dynamic Factor SSM are particularly useful for economic datasets as it accounts for the i) short time dimension (total length and data frequency) and ii) potentially many different time series. However, we are not certain if this fits the exercise requirements. 
 
 Alternatively, TFTs would likely be particularly useful for our research question. However, we are not certain if this fits the exercise requirements.
+
+When using TFTs, we have the opportunity to use static covariates as inputs to our model (i.e. time invariant inputs). For example, the country of interest (=US) or, when looking at smaller samples, the Fed chairperson, e.g. -> do we have any information that is a static covariate?
 
 <!-- 
 ### Questions to ask 
