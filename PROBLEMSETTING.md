@@ -25,13 +25,13 @@ $$\mathcal{I}_t^{\text{fed}} = \mathcal{I}_t^{\text{public}} \cup \mathcal{I}_t^
 
 $$ \mathcal{S} = \\{s_{kt}: k = 1, ..., K_t; t = 1, ..., T\\}.$$
 
-The Fed uses speeches $\mathcal{S}$ as a **forward guidance** mechanism to influence $\mathcal{I}_t^{\text{public}}$. If $\mathcal{I}_t^{\text{fed, excl}} \neq \emptyset$, the Fed communicates its superior information through $s_{kt}$.
-However, Fed communication is complex and not perfectly interpretable. Define a *comprehension operator* $\mathcal{C}()$ such that the public extracts from a speech $s_{kt}$:
+The Fed uses speeches $\mathcal{S}$ as a **forward guidance** mechanism to influence $\mathcal{I}\_t^{\text{public}}$. If $\mathcal{I}\_t^{\text{fed, excl}} \neq \emptyset$, the Fed communicates its superior information through $s_{kt}$.
+However, Fed communication is complex and not perfectly interpretable. Define a *comprehension operator* $\mathcal{C}(\cdot)$ such that the public extracts from a speech $s_{kt}$:
 
 $$\mathcal{C}(s_{kt}) \subseteq \mathcal{I}_t^{\text{fed, excl}} $$
 
-where the wedge $\mathcal{I}_t^{\text{fed, excl}} \setminus \mathcal{C}(s_{kt}) \neq \emptyset$ reflects imperfect public understanding. With perfect comprehension, $\mathcal{C}(s_{kt}) = \mathcal{I}_t^{\text{fed,  excl}}$, eliminating the wedge such that $\mathcal{I}_t^{\text{fed}} = \mathcal{I}_t^{text{public}}$.
-Thus, a speech $s_{kt}$ reveals a signal $\sigma$ about future states of the world $\omega\_{t+h}$ at some future horizon $h > 0$:
+where the wedge $\mathcal{I}\_t^{\text{fed, excl}} \setminus \mathcal{C}(s_{kt}) \neq \emptyset$ reflects imperfect public understanding. With perfect comprehension, $\mathcal{C}(s_{kt}) = \mathcal{I}_t^{\text{fed,  excl}}$, eliminating the wedge such that $\mathcal{I}_t^{\text{fed}} = \mathcal{I}_t^{text{public}}$.
+Thus, a speech $s\_{kt}$ reveals a signal $\sigma$ about future states of the world $\omega\_{t+h}$ at some future horizon $h > 0$:
 
 $$s_{kt} \supseteq \sigma(\omega\_{t+h})$$
 
@@ -44,7 +44,7 @@ Then, the extracted signal improves forecast accuracy over forecasts not incorpo
 
 1. $\mathcal{I}_t^{\text{fed, excl}} \neq \emptyset$: the Fed possesses superior information
 2. $\hat{\sigma}(s_{kt}) \neq \emptyset$: the speech reveals a signal
-3. $\mathcal{I}_t^{\text{fed, excl}} \setminus \mathcal{C}(s_{kt}) \neq \emptyset$: the public does not fully incorporate this signal.
+3. $\mathcal{I}\_t^{\text{fed, excl}} \setminus \mathcal{C}(s_{kt}) \neq \emptyset$: the public does not fully incorporate this signal.
 
 where $\hat{\boldsymbol{x}}\_{t+h} = f \left( \boldsymbol{X}^{(t)},  \hat{\sigma}(s_{kt}) \right)$ and $\hat{\boldsymbol{x}}_{t+h}^{\text{public}} = f \left( \boldsymbol{X}^{(t)} \right)$ and $\succ$ denotes superiority under some loss function $\mathcal{L}$.
 
@@ -55,7 +55,7 @@ To effectively address the forecasting challenge, we propose a modeling framewor
 
 **Input Processing and Signal Extraction**
 
-The signal $\hat{\sigma}(s\_{kt})$ will be extracted from Fed speeches using state-of-the-art financial language models, such as FOMC-RoBERTa^[See https://huggingface.co/gtfintechlab/FOMC-RoBERTa], FinBERT^[ See https://huggingface.co/ProsusAI/finbert], or Central Bank RoBERTa^[See https://huggingface.co/Moritz-Pfeifer/CentralBankRoBERTa-sentiment-classifier]. These embeddings allow us to transform unstructured text into high-dimensional vectors that (potentially) capture the superior information revealed by the central bank speech, which has not already been incorporated by the public, see formal setting from above. To prevent data leakage, we will find a way to align these speech embeddings with the exact date & time they were published. 
+The signal $\hat{\sigma}(s\_{kt})$ will be extracted from Fed speeches using state-of-the-art financial language models, such as FOMC-RoBERTa^[See https://huggingface.co/gtfintechlab/FOMC-RoBERTa], FinBERT^[ See https://huggingface.co/ProsusAI/finbert], or Central Bank RoBERTa^[See https://huggingface.co/Moritz-Pfeifer/CentralBankRoBERTa-sentiment-classifier]. These embeddings allow us to transform unstructured text into high-dimensional vectors that (potentially) capture the superior information revealed by the central bank speech, which has not already been incorporated by the public, see formal setting from above. To prevent data leakage, we will align these speech embeddings with the exact date & time they were published (tbd). 
 
 **Heterogeneity and Interpretabilty**
 A core advantage of the TFT is its internal **Variable Selection Networks**, which will allow the model to automatically weigh the importance of different inputs. it identifies whether a specific Fed speech or a static speaker characteristic (such as the specific Fed chairperson or institutional features^[See Lustenberger, Rossi and Zeitz, Central Bank Communication: New Data and Stylized Facts From a Century of Fed Speeches, forthcoming as SNB Working Paper, 2026.]) carries more predictive power for a given horizon h. Furthermore, the model incorporates **static covariates** (i.e. metadata) to provide context that remains invariant over the forecasting period, such as the specific institutional framework of the Federal Reserve. By using **Gated Residual Networks**, the TFT can selectively skip unused components of the architecture, which prevents over-parameterization.
@@ -80,7 +80,7 @@ A core advantage of the TFT is its internal **Variable Selection Networks**, whi
 ## Machine Learning Benchmark
 - tbd.
 
-- Model itself without text embeddings (do we improve forecasts or do we introduce noise?)
+- Model itself without text embeddings: this way, we can check whether we improve forecasts or introduce noise.
 
 ## Statistical Benchmark
 - Stationarity Checks 
