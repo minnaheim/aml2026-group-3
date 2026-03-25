@@ -1,0 +1,35 @@
+minimum_pre_commit_version: "4.3.0"
+
+repos:
+  # 1. Essential Git Sanity Checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # - id: trailing-whitespace
+      # - id: end-of-file-fixer
+      # - id: check-yaml
+      # - id: check-toml
+      # - id: check-case-conflict
+      # Check for files > 100MB (102400 KB)
+      - id: check-added-large-files
+        args: ["--maxkb=102400"]
+
+  # 2. UV Lockfile Sync (keeps your uv.lock up to date)
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.0
+    hooks:
+      - id: uv-lock
+
+  # # 3. Ruff: Replaces pyupgrade, black, isort, flake8, and nbQA
+  # - repo: https://github.com/astral-sh/ruff-pre-commit
+  #   rev: v0.9.7 # Using a stable version
+  #   hooks:
+  #     - id: ruff
+  #       args: ["--fix"]
+  #     - id: ruff-format
+
+  # 4. Security (More robust than detect-private-key)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.23.3
+    hooks:
+      - id: gitleaks
