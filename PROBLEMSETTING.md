@@ -72,14 +72,46 @@ A core advantage of the TFT is its internal **Variable Selection Networks**, whi
 - Horizon
   - for *Monthly* Variables (CPI, unemployment rate, exchange rates): 1,6,12
   - for *Quarterly* Variables (GDP): 1,4
- 
+
+## Evaluation Metrics
+To assess the predictive power of the extracted signal $\hat{\sigma}(s_{kt})$, we evaluate our forecasts $\hat{x}_{t+h}$ against a pseudo-out-of-sample (POOS) test set. We employ RMSE and MAE as primary loss functions.
+
+The Root Mean Squared Error (RMSE) provides a goodness of fit for the model, but the squared term penalizes large outliers for forecast misses:
+
+$$RMSE = \sqrt{\frac{1}{N} \sum_{t=1}^{N} (y_{t+h} - \hat{y}_{t+h})^2}$$
+
+The Mean Absolute Error takes the absolute value of the distance between the forecast and actual outcome and as such is less affected by large outliers:
+
+$$MAE = \frac{1}{N} \sum_{t=1}^{N} |y_{t+h} - \hat{y}_{t+h}|$$
+
+Evaluating the forecasts of the model, but with and without the informational encoding from FED speeches, can be done through a comparison of the model incorporating both macroeconomic variables and text, versus a similar prediction using only macroeconomic variables. In this case, if the relative Root Mean Squared Error (rRMSE) is less than 1, it indicates that the inclusion of informational encoding from FED speeches adds predictive power to the model.
+
+$$\text{rRMSE} = \frac{RMSE_{\text{TFT (Macro + Text)}}}{RMSE_{\text{Baseline (AR/Macro-only)}}}$$
+
+**Quantile Loss and q-Risk**
+Since TFT is a multi-horizon probabilistic forecasting model, we additionally evaluate forecast distributions through **Quantile Loss** (pinball loss) and its normalized out-of-sample summary (**q-Risk**). We will report quantiles \(q\in\{0.1,0.5,0.9\}\) (and optionally \(q\in\{0.05,0.95\}\) for a 90/95% prediction interval).
+
+The normalized q-Risk over the full out-of-sample horizon is:
+
+$$q\text{-Risk} = \frac{2 \sum_{y_t \in \bar{\Omega}} \sum_{\tau=1}^{\tau_{max}} QL(y_t, \hat{y}(q, t-\tau, \tau), q)}{\sum_{y_t \in \bar{\Omega}} \sum_{\tau=1}^{\tau_{max}} (|y_t| + \varepsilon)}$$
+
+This complements RMSE/MAE by quantifying tail risk and uncertainty calibration, which is especially relevant for macroeconomic variables such as inflation and GDP growth.
+
+**Variable Selection Weights**
+To assess whether Fed speeches provide incremental predictive content, we will analyze the TFT Variable Selection Network (VSN) weights as a measure of feature relevance.
+
+Mechanism: For each prediction and forecast horizon, TFT produces sample-specific selection weights that indicate the relative importance of each input feature.
+
+Project application: We will aggregate these weights across the pseudo-out-of-sample test set (e.g., by median and interquartile range) and compare the relevance of speech embeddings with that of core macro predictors (e.g., lagged CPI and unemployment). This provides an interpretable measure of relative contribution, while not being interpreted as a causal effect.
 
 
 ## Hyperparameter Tuning
 - As seen in the [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363) paper, where the hyperparameter optimisation is conducted via random search, we will do so too. 
 
 ## Machine Learning Benchmark
-- tbd.
+1. **DeepAR**: Salinas, Flunkert, Gasthaus, Januschowski (2020), *DeepAR: Probabilistic Forecasting with Autoregressive Recurrent Networks*.
+  - Link: https://www.sciencedirect.com/science/article/pii/S0169207019301888
+  - DeepAR is a supervised learning methodology for producing accurate probabilistic forecasts. It is a frequently used benchmark in multi-horizon forecasting because it addresses the limitations of classical univariate methods by learning from a large collection of related time series.
 
 - Model itself without text embeddings: this way, we can check whether we improve forecasts or introduce noise.
 
