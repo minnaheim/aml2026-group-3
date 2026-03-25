@@ -1,6 +1,6 @@
 # AML Proposal: Group 03 -- WORK IN PROGRESS
 
-## Problem Setting 
+## Problem Setting
 
 **Historical Context and Motivation**
 
@@ -13,7 +13,7 @@ The recent literature has frequently discussed whether the Fed possesses **super
 ## Formal Setting
 
 We define $\boldsymbol{X}\in \mathbb{R}^{T\times n}$ as a matrix of $n$ variables observed over $T$ time periods where $\boldsymbol{X}^{(t)}\in \mathbb{R}^{t\times n}$ is a truncation of $\boldsymbol{X}$ up to $t\leq T$.
-Let there be an information set defined as 
+Let there be an information set defined as
 
 $$\mathcal{I}_t^{\text{public}} = \\{ \boldsymbol{X}^{(t)} \in \mathbb{R}^{t\times n}: \boldsymbol{X} \text{ observable to the public at } t \\}$$
 
@@ -39,8 +39,8 @@ We aim to extract some signal $\hat{\sigma}(s_{kt})$ from a speech $s_{kt}$ and 
 
 $$\hat{\boldsymbol{x}}^{(j)}\_{t+h} = f \left( \boldsymbol{X}^{(t)},  \hat{\sigma}(s_{kt}) \right)$$
 
-where $f$ denotes a deep learning forecasting model described below. 
-Then, the extracted signal improves forecast accuracy over forecasts not incorporating signals from Fed speeches, i.e., $\hat{\boldsymbol{x}}\_{t+h} \succ \hat{\boldsymbol{x}}_{t+h}^{text{public}}$ if and only if 
+where $f$ denotes a deep learning forecasting model described below.
+Then, the extracted signal improves forecast accuracy over forecasts not incorporating signals from Fed speeches, i.e., $\hat{\boldsymbol{x}}\_{t+h} \succ \hat{\boldsymbol{x}}_{t+h}^{text{public}}$ if and only if
 
 1. $\mathcal{I}_t^{\text{fed, excl}} \neq \emptyset$: the Fed possesses superior information
 2. $\hat{\sigma}(s_{kt}) \neq \emptyset$: the speech reveals a signal
@@ -51,16 +51,35 @@ where $\hat{\boldsymbol{x}}\_{t+h} = f \left( \boldsymbol{X}^{(t)},  \hat{\sigma
 
 ## Model Architecture
 
-To effectively address the forecasting challenge, we propose a modeling framework centered on the Temporal Fusion Transformer (TFT)^[based on the following paper: https://arxiv.org/abs/1912.09363]. This choice is driven by the inherent complexity of our dataset, which is characterized by heterogeneous inputs including monthly macroeconomic indicators (e.g., CPI and unemployment), high-frequency exchange rates, and irregularly timed Federal Reserve speeches. Unlike traditional "black-box" deep learning models, the TFT is designed for high-performance multi-horizon forecasting while maintaining a level of interpretability that is crucial for our economic application.
+To effectively address the forecasting challenge, we propose a modeling framework centered on the [Temporal Fusion Transformer (TFT)](https://arxiv.org/abs/1912.09363). This choice is driven by the inherent complexity of our dataset, which is characterized by heterogeneous inputs including monthly macroeconomic indicators (e.g., CPI and unemployment), high-frequency exchange rates, and irregularly timed Federal Reserve speeches. Unlike traditional "black-box" deep learning models, the TFT is designed for high-performance multi-horizon forecasting while maintaining a level of interpretability that is crucial for our economic application.
 
 **Input Processing and Signal Extraction**
 
-The signal $\hat{\sigma}(s\_{kt})$ will be extracted from Fed speeches using state-of-the-art financial language models, such as FOMC-RoBERTa^[See https://huggingface.co/gtfintechlab/FOMC-RoBERTa], FinBERT^[ See https://huggingface.co/ProsusAI/finbert], or Central Bank RoBERTa^[See https://huggingface.co/Moritz-Pfeifer/CentralBankRoBERTa-sentiment-classifier]. These embeddings allow us to transform unstructured text into high-dimensional vectors that (potentially) capture the superior information revealed by the central bank speech, which has not already been incorporated by the public, see formal setting from above. To prevent data leakage, we will align these speech embeddings with the exact date & time they were published (tbd). 
+The signal $\hat{\sigma}(s\_{kt})$ will be extracted from Fed speeches using state-of-the-art financial language models, such as [FOMC-RoBERT](https://huggingface.co/gtfintechlab/FOMC-RoBERTa), [FinBERT](https://huggingface.co/ProsusAI/finbert), or [Central Bank RoBERTa](https://huggingface.co/Moritz-Pfeifer/CentralBankRoBERTa-sentiment-classifier). These embeddings allow us to transform unstructured text into high-dimensional vectors that (potentially) capture the superior information revealed by the central bank speech, which has not already been incorporated by the public, see formal setting from above. To prevent data leakage, we will align these speech embeddings with the exact date & time they were published (tbd).
 
 **Heterogeneity and Interpretabilty**
 
 A core advantage of the TFT is its internal **Variable Selection Networks**, which will allow the model to automatically weigh the importance of different inputs. it identifies whether a specific Fed speech or a static speaker characteristic (such as the specific Fed chairperson or institutional features^[See Lustenberger, Rossi and Zeitz, Central Bank Communication: New Data and Stylized Facts From a Century of Fed Speeches, forthcoming as SNB Working Paper, 2026.]) carries more predictive power for a given horizon h. Furthermore, the model incorporates **static covariates** (i.e. metadata) to provide context that remains invariant over the forecasting period, such as the specific institutional framework of the Federal Reserve. By using **Gated Residual Networks**, the TFT can selectively skip unused components of the architecture, which prevents over-parameterization.
 
+The Temporal Fusion Transformer has been implemented by [pytorch-forecasting](https://pytorch-forecasting.readthedocs.io/en/v1.0.0/api/pytorch_forecasting.models.temporal_fusion_transformer.TemporalFusionTransformer.html) and it is well maintained, so we believe this is the implementation we should use for our project. 
+
+<!-- 
+**Input**:
+- macro vars (inflation expectations, unemployment rate, gdp, etc.)
+- financial vars (FFR, yield curve, etc.)
+- Fed forecasts  -->
+
+<!-- 
+
+Ideas for Variable Setting for TFT:
+(using example from kaggle implementation of store sales)
+
+- create as many variables as possible (i.e. predict fed speeches)
+- day of the week of fed speech, speaker, time of day, etc.
+- is the day of speech a holiday, etc.
+- is the day a weekend day, e.g.
+
+ -->
 
 ## Evaluation Protocol
 - Cross-Validation (n-folds dep. on available data, *tbd since we use temporal data*)
@@ -105,7 +124,7 @@ Mechanism: For each prediction and forecast horizon, TFT produces sample-specifi
 Project application: We will aggregate these weights across the pseudo-out-of-sample test set (e.g., by median and interquartile range) and compare the relevance of speech embeddings with that of core macro predictors (e.g., lagged CPI and unemployment). This provides an interpretable measure of relative contribution, while not being interpreted as a causal effect.
 
 ## Hyperparameter Tuning
-- As seen in the [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363) paper, where the hyperparameter optimisation is conducted via random search, we will do so too. 
+- As seen in the [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363) paper, where the hyperparameter optimisation is conducted via random search, we will do so too.
 
 ## Machine Learning Benchmark
 1. **DeepAR**: Salinas, Flunkert, Gasthaus, Januschowski (2020), *DeepAR: Probabilistic Forecasting with Autoregressive Recurrent Networks*.
@@ -124,27 +143,27 @@ Project application: We will aggregate these weights across the pseudo-out-of-sa
 - Model itself without text embeddings: this way, we can check whether we improve forecasts or introduce noise.
 
 ## Statistical Benchmark
-- Stationarity Checks 
+- Stationarity Checks
 - AR(1) or AR(2)
 
 
-## Our Questions / To Discuss
+<!-- ## Our Questions / To Discuss
 
-In class, we saw that we will discuss SSMs such as Mamba. Dynamic Factor SSM are particularly useful for economic datasets as it accounts for the i) short time dimension (total length and data frequency) and ii) potentially many different time series. However, we are not certain if this fits the exercise requirements. 
+In class, we saw that we will discuss SSMs such as Mamba. Dynamic Factor SSM are particularly useful for economic datasets as it accounts for the i) short time dimension (total length and data frequency) and ii) potentially many different time series. However, we are not certain if this fits the exercise requirements.
 
 Alternatively, TFTs would likely be particularly useful for our research question. However, we are not certain if this fits the exercise requirements.
 
-When using TFTs, we have the opportunity to use static covariates as inputs to our model (i.e. time invariant inputs). For example, the country of interest (=US) or, when looking at smaller samples, the Fed chairperson, e.g. -> do we have any information that is a static covariate?
+When using TFTs, we have the opportunity to use static covariates as inputs to our model (i.e. time invariant inputs). For example, the country of interest (=US) or, when looking at smaller samples, the Fed chairperson, e.g. -> do we have any information that is a static covariate? -->
 
-<!-- 
-### Questions to ask 
+<!--
+### Questions to ask
 
 - Granger Causality Tests (?)
 - FinBert takes fixed number of tokens as input → how do do this?
 - any specific recommendations for the SSM? Mamba, e.g.?
 
 
-#### Sources 
+#### Sources
 
 - https://arxiv.org/abs/2506.22763
 - https://www.alexandria.unisg.ch/server/api/core/bitstreams/1d94cc0d-30b9-4d0d-9131-8e8c20c46837/content (finetuning FinBERT to FOMC minutes)
