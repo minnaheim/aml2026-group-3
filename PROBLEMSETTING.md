@@ -63,18 +63,6 @@ A core advantage of the TFT is its internal **Variable Selection Networks**, whi
 
 The Temporal Fusion Transformer has been implemented by [pytorch-forecasting](https://pytorch-forecasting.readthedocs.io/en/v1.0.0/api/pytorch_forecasting.models.temporal_fusion_transformer.TemporalFusionTransformer.html) and it is well maintained, so we believe this is the implementation we should use for our project. 
 
-
-## Evaluation Protocol
-- Cross-Validation (n-folds dep. on available data, *tbd since we use temporal data*)
-- Error Metrics:
-  - Mean RMSE (over all folds)
-  - Mean Average Error
-  - Mean Average Percentage Error
-- Use of Vintages of Macro Variables^[We assume Fed Speeches are unrevised]
-- Horizon
-  - for *Monthly* Variables (CPI, unemployment rate, exchange rates): 1,6,12
-  - for *Quarterly* Variables (GDP): 1,4
-
 <!-- 
 **Input**:
 - macro vars (inflation expectations, unemployment rate, gdp, etc.)
@@ -93,11 +81,65 @@ Ideas for Variable Setting for TFT:
 
  -->
 
+## Evaluation Protocol
+- Cross-Validation (n-folds dep. on available data, *tbd since we use temporal data*)
+- Error Metrics:
+  - Mean RMSE (over all folds)
+  - Mean Average Error
+  - Mean Average Percentage Error
+- Use of Vintages of Macro Variables^[We assume Fed Speeches are unrevised]
+- Horizon
+  - for *Monthly* Variables (CPI, unemployment rate, exchange rates): 1,6,12
+  - for *Quarterly* Variables (GDP): 1,4
+
+## Evaluation Metrics
+To assess the predictive power of the extracted signal $\hat{\sigma}(s_{kt})$, we evaluate our forecasts $\hat{x}_{t+h}$ against a pseudo-out-of-sample (POOS) test set. We employ RMSE and MAE as primary loss functions.
+
+The Root Mean Squared Error (RMSE) provides a goodness of fit for the model, but the squared term penalizes large outliers for forecast misses:
+
+$$RMSE = \sqrt{\frac{1}{N} \sum_{t=1}^{N} (y_{t+h} - \hat{y}_{t+h})^2}$$
+
+The Mean Absolute Error takes the absolute value of the distance between the forecast and actual outcome and as such is less affected by large outliers:
+
+$$MAE = \frac{1}{N} \sum_{t=1}^{N} |y_{t+h} - \hat{y}_{t+h}|$$
+
+Evaluating the forecasts of the model, but with and without the informational encoding from FED speeches, can be done through a comparison of the model incorporating both macroeconomic variables and text, versus a similar prediction using only macroeconomic variables. In this case, if the relative Root Mean Squared Error (rRMSE) is less than 1, it indicates that the inclusion of informational encoding from FED speeches adds predictive power to the model.
+
+$$\text{rRMSE} = \frac{RMSE_{\text{TFT (Macro + Text)}}}{RMSE_{\text{Baseline (AR/Macro-only)}}}$$
+
+**Quantile Loss and q-Risk**
+Since TFT is a multi-horizon probabilistic forecasting model, we additionally evaluate forecast distributions through **Quantile Loss** (pinball loss) and its normalized out-of-sample summary (**q-Risk**). We will report quantiles \(q\in\{0.1,0.5,0.9\}\) (and optionally \(q\in\{0.05,0.95\}\) for a 90/95% prediction interval).
+
+The normalized q-Risk over the full out-of-sample horizon is:
+
+$$q\text{-Risk} = \frac{2 \sum_{y_t \in \bar{\Omega}} \sum_{\tau=1}^{\tau_{max}} QL(y_t, \hat{y}(q, t-\tau, \tau), q)}{\sum_{y_t \in \bar{\Omega}} \sum_{\tau=1}^{\tau_{max}} (|y_t| + \varepsilon)}$$
+
+This complements RMSE/MAE by quantifying tail risk and uncertainty calibration, which is especially relevant for macroeconomic variables such as inflation and GDP growth.
+
+**Variable Selection Weights**
+To assess whether Fed speeches provide incremental predictive content, we will analyze the TFT Variable Selection Network (VSN) weights as a measure of feature relevance.
+
+Mechanism: For each prediction and forecast horizon, TFT produces sample-specific selection weights that indicate the relative importance of each input feature.
+
+Project application: We will aggregate these weights across the pseudo-out-of-sample test set (e.g., by median and interquartile range) and compare the relevance of speech embeddings with that of core macro predictors (e.g., lagged CPI and unemployment). This provides an interpretable measure of relative contribution, while not being interpreted as a causal effect.
+
 ## Hyperparameter Tuning
 - As seen in the [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363) paper, where the hyperparameter optimisation is conducted via random search, we will do so too.
 
 ## Machine Learning Benchmark
-- tbd.
+1. **DeepAR**: Salinas, Flunkert, Gasthaus, Januschowski (2020), *DeepAR: Probabilistic Forecasting with Autoregressive Recurrent Networks*.
+  - Link: https://www.sciencedirect.com/science/article/pii/S0169207019301888
+  - DeepAR is a supervised learning methodology for producing accurate probabilistic forecasts. It is a frequently used benchmark in multi-horizon forecasting because it addresses the limitations of classical univariate methods by learning from a large collection of related time series.
+
+2. **ARIMA (macro-only benchmark)**: Box-Jenkins ARIMA models use autoregressive lags, differencing, and moving-average terms to model persistent macroeconomic dynamics.
+  - In this project, ARIMA serves as a transparent classical baseline for GDP growth and inflation forecasts, allowing us to test whether text-enhanced TFT improves beyond a strong traditional time-series model. The ARIMA benchmark was used as an evaluation metric for the Laborda et al. project, listed below.
+  - Reference: Box, G.; Jenkins, G.M. *Time Series Analysis; Forecasting and Control*; Holden-Day: San Francisco, CA, USA, 1970.
+
+3. **Multi-Country and Multi-Horizon GDP Forecasting Using TFTs**.
+  - Citation: Laborda, J.; Ruano, S.; Zamanillo, I. *Multi-Country and Multi-Horizon GDP Forecasting Using Temporal Fusion Transformers*. Mathematics 2023, 11, 2625. https://doi.org/10.3390/math11122625.
+  - This paper applies TFT to GDP forecasting across countries and multiple horizons, making it directly aligned with our multi-horizon macroeconomic setup.
+  - We use it as method support for TFT-based design choices and as a benchmark reference for reporting point and probabilistic forecast performance.
+
 - Model itself without text embeddings: this way, we can check whether we improve forecasts or introduce noise.
 
 ## Statistical Benchmark
@@ -105,13 +147,13 @@ Ideas for Variable Setting for TFT:
 - AR(1) or AR(2)
 
 
-## Our Questions / To Discuss
+<!-- ## Our Questions / To Discuss
 
 In class, we saw that we will discuss SSMs such as Mamba. Dynamic Factor SSM are particularly useful for economic datasets as it accounts for the i) short time dimension (total length and data frequency) and ii) potentially many different time series. However, we are not certain if this fits the exercise requirements.
 
 Alternatively, TFTs would likely be particularly useful for our research question. However, we are not certain if this fits the exercise requirements.
 
-When using TFTs, we have the opportunity to use static covariates as inputs to our model (i.e. time invariant inputs). For example, the country of interest (=US) or, when looking at smaller samples, the Fed chairperson, e.g. -> do we have any information that is a static covariate?
+When using TFTs, we have the opportunity to use static covariates as inputs to our model (i.e. time invariant inputs). For example, the country of interest (=US) or, when looking at smaller samples, the Fed chairperson, e.g. -> do we have any information that is a static covariate? -->
 
 <!--
 ### Questions to ask
