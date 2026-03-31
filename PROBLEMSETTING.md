@@ -127,23 +127,15 @@ Project application: We will aggregate these weights across the pseudo-out-of-sa
 - As seen in the [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363) paper, where the hyperparameter optimisation is conducted via random search, we will do so too.
 
 ## Machine Learning Benchmark
-1. **DeepAR**: Salinas, Flunkert, Gasthaus, Januschowski (2020), *DeepAR: Probabilistic Forecasting with Autoregressive Recurrent Networks*.
-  - Link: https://www.sciencedirect.com/science/article/pii/S0169207019301888
-  - DeepAR is a supervised learning methodology for producing accurate probabilistic forecasts. It is a frequently used benchmark in multi-horizon forecasting because it addresses the limitations of classical univariate methods by learning from a large collection of related time series.
-
-2. **ARIMA (macro-only benchmark)**: Box-Jenkins ARIMA models use autoregressive lags, differencing, and moving-average terms to model persistent macroeconomic dynamics.
+1. **ARIMA (macro-only benchmark)**: Box-Jenkins ARIMA models use autoregressive lags, differencing, and moving-average terms to model persistent macroeconomic dynamics.
   - In this project, ARIMA serves as a transparent classical baseline for GDP growth and inflation forecasts, allowing us to test whether text-enhanced TFT improves beyond a strong traditional time-series model. The ARIMA benchmark was used as an evaluation metric for the Laborda et al. project, listed below.
   - Reference: Box, G.; Jenkins, G.M. *Time Series Analysis; Forecasting and Control*; Holden-Day: San Francisco, CA, USA, 1970.
 
-3. **Multi-Country and Multi-Horizon GDP Forecasting Using TFTs**.
-  - Citation: Laborda, J.; Ruano, S.; Zamanillo, I. *Multi-Country and Multi-Horizon GDP Forecasting Using Temporal Fusion Transformers*. Mathematics 2023, 11, 2625. https://doi.org/10.3390/math11122625.
-  - This paper applies TFT to GDP forecasting across countries and multiple horizons, making it directly aligned with our multi-horizon macroeconomic setup.
-  - We use it as method support for TFT-based design choices and as a benchmark reference for reporting point and probabilistic forecast performance.
-
+2. **Our TFT model from above, without the Fed Speeches**:
 - Model itself without text embeddings: this way, we can check whether we improve forecasts or introduce noise.
+- This is loosely based on the following paper: Laborda, J.; Ruano, S.; Zamanillo, I. *Multi-Country and Multi-Horizon GDP Forecasting Using Temporal Fusion Transformers*. Mathematics 2023, 11, 2625. https://doi.org/10.3390/math11122625
 
 ## Statistical Benchmark
-- Stationarity Checks
 - AR(1) or AR(2)
 
 
