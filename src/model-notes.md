@@ -3,8 +3,12 @@
 
 **To Dos**: 
 
-- now: 3 monthly series to predict one (removed others due to length, and shortened the 3 to overlap)
-- add different y, predict on all 3 vars
+- get metadata 
+- scale different values, so median loss is comparable
+- 
+
+<!-- - now: 3 monthly series to predict one (removed others due to length, and shortened the 3 to overlap)
+- add different y, predict on all 3 vars -->
 - create training loop, which tries to predict each macro variable based on the others
 
 
