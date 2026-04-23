@@ -4,7 +4,7 @@
 **To Dos**: 
 
 - now: 3 monthly series to predict one (removed others due to length, and shortened the 3 to overlap)
-- in future: predict 1, on only 1? -> don't think this helps
+- add different y, predict on all 3 vars
 - create training loop, which tries to predict each macro variable based on the others
 
 
