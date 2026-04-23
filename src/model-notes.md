@@ -3,15 +3,17 @@
 
 **To Dos**: 
 
-- read notes from whatsapp chat
-- source 2-4 monthly/quarterly series
-- add metadata/time invariant things to include
-- use tft examples to understand
+- now: 3 monthly series to predict one (removed others due to length, and shortened the 3 to overlap)
+- in future: predict 1, on only 1? -> don't think this helps
+- create training loop, which tries to predict each macro variable based on the others
+
+
 
 
 **Extensions for TFT**:
 - to get more static covariates (because apparently model performs best with max. metadata), scrape information from [FRED website](https://fred.stlouisfed.org/series/PAYEMS)?
--  
+- Add weights to meetings, depending on when the meetings occur w.r.t the FOMC meeting 
+- include the blackout period
 
 
 
