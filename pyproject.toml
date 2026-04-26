@@ -20,4 +20,5 @@ dependencies = [
     "tensorflow>=2.21.0",
     "torch>=2.10.0",
     "transformers>=5.3.0",
+    "wandb>=0.26.1",
 ]

@@ -12,3 +12,4 @@ src/lightning_logs
 # dont commit logs & checkpoints
 
 checkpoints
+wandb

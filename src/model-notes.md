@@ -2,11 +2,19 @@
 
 
 **To Dos**: 
-
-- scale different values, so median loss is comparable
-- check what Naive model is really
 - remove lagged variables if trying to predict variable of interest!! 
-- add weights & biases extension
+- run all for new variation -> long form data, what happens?
+
+
+### Keeping Score of what I did:
+
+1. Added the 4 monthly macro variables to the tft (good)
+2. Added metadata from fredR package of the target variable to the model (better)
+3. Added the metadata of all macro variables to the model (worse!)
+4. Scaled data (to compare model performance), changed training dataset
+    a. pivoted to long 
+    b. changed `series_id` from macro to actual var name -> constant var no info
+    c. included metadata of each variable aka one: `meta_unit` (changes w/ var), and one `meta_popularity`
 
 
 
