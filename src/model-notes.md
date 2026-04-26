@@ -3,19 +3,15 @@
 
 **To Dos**: 
 
-- get metadata 
 - scale different values, so median loss is comparable
-- 
-
-<!-- - now: 3 monthly series to predict one (removed others due to length, and shortened the 3 to overlap)
-- add different y, predict on all 3 vars -->
-- create training loop, which tries to predict each macro variable based on the others
-
+- check what Naive model is really
+- remove lagged variables if trying to predict variable of interest!! 
+- add weights & biases extension
 
 
 
 **Extensions for TFT**:
-- to get more static covariates (because apparently model performs best with max. metadata), scrape information from [FRED website](https://fred.stlouisfed.org/series/PAYEMS)?
+<!-- done: - to get more static covariates (because apparently model performs best with max. metadata), scrape information from [FRED website](https://fred.stlouisfed.org/series/PAYEMS)? -->
 - Add weights to meetings, depending on when the meetings occur w.r.t the FOMC meeting 
 - include the blackout period
 
