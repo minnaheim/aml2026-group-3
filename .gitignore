@@ -8,3 +8,7 @@ data/us_speeches.csv
 .claude
 
 src/lightning_logs
+
+# dont commit logs & checkpoints
+
+checkpoints
