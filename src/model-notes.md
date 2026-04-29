@@ -1,9 +1,13 @@
 ## Notes on TFT Model to use:
 
-
 **To Dos**: 
-- remove lagged variables if trying to predict variable of interest!! 
-- run all for new variation -> long form data, what happens?
+<!-- - remove lagged variables if trying to predict variable of interest? -->
+- add daily data (business day and literally every day)
+- add meta data for all vars, not just target
+- remove up to lag 12?
+- add scaling (not just tft norm)
+- add renku connection
+- change hyperparams, else takes too long to tune
 
 
 ### Keeping Score of what I did:
@@ -22,7 +26,8 @@
 <!-- done: - to get more static covariates (because apparently model performs best with max. metadata), scrape information from [FRED website](https://fred.stlouisfed.org/series/PAYEMS)? -->
 - Add weights to meetings, depending on when the meetings occur w.r.t the FOMC meeting 
 - include the blackout period
-
+- should we create separate models for the 4 targets?
+- include alfred vintages for the cross validation -> importantly: expanding CV, no more than 7 folds, else training takes too long
 
 
 **Final Choice**: [Temporal Fusion Transformer in Pytorch](https://pytorch-forecasting.readthedocs.io/en/v1.0.0/api/pytorch_forecasting.models.temporal_fusion_transformer.TemporalFusionTransformer.html)
