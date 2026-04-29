@@ -1,9 +1,13 @@
 ## Notes on TFT Model to use:
 
-
 **To Dos**: 
-- remove lagged variables if trying to predict variable of interest?
-- add 
+<!-- - remove lagged variables if trying to predict variable of interest? -->
+- add daily data (business day and literally every day)
+- add meta data for all vars, not just target
+- remove up to lag 12?
+- add scaling (not just tft norm)
+- add renku connection
+- change hyperparams, else takes too long to tune
 
 
 ### Keeping Score of what I did:
