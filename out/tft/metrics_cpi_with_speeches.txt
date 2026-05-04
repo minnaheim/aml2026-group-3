@@ -1,0 +1,8 @@
+Target:            CPI
+Speech embeddings: ON
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 4.859
+SMAPE = 1.68%

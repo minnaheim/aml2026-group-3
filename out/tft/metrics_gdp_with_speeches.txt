@@ -1,0 +1,8 @@
+Target:            GDP
+Speech embeddings: ON
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 577.7
+SMAPE = 2.27%
