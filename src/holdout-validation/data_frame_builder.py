@@ -28,7 +28,8 @@ class DataFrameBuilder:
     daily_path = self.path + '/data/macro-vars-daily.csv'
     df_daily = self._read_rename_date(daily_path)
     df_daily = df_daily.drop(columns=["SOFR", "T10Y2Y", "EUR"]) # remove shorter vars: SOFR, T10Y2Y, EUR
-    # print(df_daily.tail(20))
+    # make 5-day daily vars (GBP, YEN) 0 on weekends instead of NaN
+    df_daily[['GBP', 'YEN']] = df_daily[['GBP', 'YEN']].fillna(0)
 
     # ------- get quarterly data --------
 

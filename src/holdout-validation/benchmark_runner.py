@@ -42,13 +42,18 @@ class ARRunner:
     #     mask = actual != 0
     #     mape = np.mean(np.abs(errors[mask] / actual[mask])) * 100
     #     return {"MAE": mae, "RMSE": rmse, "MAPE": mape}
-
-    def run(self, splits, target: str = "CPI", fold: int = 0) -> pd.DataFrame:
+    def _fetch_data(self, splits, target: str = "CPI", fold: int = 0):
         train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
         test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
+        return train, test
+
+
+    def run(self, splits, target: str = "CPI", fold: int = 0) -> pd.DataFrame:
+        train, test = self._fetch_data(splits, target, fold)
 
         series     = train.set_index("date")[target]
         freq       = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
+        
         # TODO: is it a problem that we transform both separately??
         # transform both to stationarity if needed
         stationary, transform = self._transform(series, target)
