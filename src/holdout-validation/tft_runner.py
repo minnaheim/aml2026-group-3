@@ -125,20 +125,92 @@ class TFTRunner:
             use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu') -> str:
         """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
         train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
-        # print(train_raw.isna().sum())
+        print("Got data from data_frame_builder...")
         train_df  = self._add_tft_vars(train_raw)
-        training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, batch_size)
+        training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
+        print("Created TimeSeriesDataSet for tft...")
         return self.train_tft(training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
 
+    def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
+                batch_size: int = 128, device: str = 'cpu') -> pd.DataFrame:
+        """Rolling-window inference over the test split.
 
-# try this out! 
+        The test period is typically much longer than MAX_PREDICTION_LENGTH, so
+        predictions are made in non-overlapping windows of MAX_PREDICTION_LENGTH days.
+        Returns a monthly (or quarterly for GDP) DataFrame with date/actual/predicted/target.
+        """
+        # local import to avoid circular import at module level
+        from pytorch_forecasting import TemporalFusionTransformer as TFT
 
-# from data_frame_builder import DataFrameBuilder 
+        map_location = device if device in ("cuda", "mps") else "cpu"
+        model = TFT.load_from_checkpoint(checkpoint_path, map_location=map_location)
+        model.eval()
 
-# # from data_frame_builder
+        train_raw = self.dfb.get_data(splits, train=True,  model='TFT', fold=fold)
+        test_raw  = self.dfb.get_data(splits, train=False, model='TFT', fold=fold)
+
+        # build reference training dataset (data manipulation only — no retraining)
+        train_df    = self._add_tft_vars(train_raw)
+        training_ds, _, _ = self.create_tft_dataset(train_df, target, fold, batch_size)
+
+        test_len = len(test_raw)
+        step     = self.MAX_PREDICTION_LENGTH
+        all_rows: list[dict] = []
+
+        for start in range(0, test_len, step):
+            end         = min(start + step, test_len)
+            window_size = end - start
+            test_window = test_raw.iloc[start:end]
+
+            # context = train + test[0:end]; for the last partial window we still
+            # include test[0:start+step] (or up to test_len) so predict=True gets
+            # a full MAX_PREDICTION_LENGTH decoder window to index into.
+            context_end = min(start + step, test_len)
+            context_raw = pd.concat([train_raw, test_raw.iloc[:context_end]], ignore_index=True)
+            context_df  = self._add_tft_vars(context_raw)
+
+            pred_ds = TimeSeriesDataSet.from_dataset(
+                training_ds, context_df, predict=True, stop_randomization=True
+            )
+            pred_dl = pred_ds.to_dataloader(train=False, batch_size=batch_size, num_workers=0)
+
+            raw_preds = model.predict(pred_dl)          # (1, MAX_PREDICTION_LENGTH)
+            if raw_preds.ndim == 3:
+                raw_preds = raw_preds.squeeze(1)
+            preds_np = raw_preds.detach().cpu().numpy()
+
+            # for a partial last window the target days sit at the tail of the
+            # 360-step output (offset = step - window_size)
+            pred_offset = step - window_size
+
+            for i in range(window_size):
+                row = test_window.iloc[i]
+                all_rows.append({
+                    "date":      row["date"],
+                    "actual":    float(row[target]),
+                    "predicted": float(preds_np[0, pred_offset + i]),
+                    "target":    target,
+                })
+
+        result_df = pd.DataFrame(all_rows)
+        freq = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
+        result_df = (
+            result_df.set_index("date")
+                     .resample(freq).first()
+                     .dropna(subset=["actual", "predicted"])
+                     .reset_index()
+        )
+        result_df["target"] = target
+        return result_df
+
+
+
+# try this out!
+# from data_frame_builder import DataFrameBuilder
+
 # path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
-# dfb = DataFrameBuilder(path)
-# df = dfb.process_data()
+# dfb  = DataFrameBuilder(path)
+# df   = dfb.process_data()
 
 # splits, holdout = dfb.generate_split(df)
 
@@ -147,8 +219,7 @@ class TFTRunner:
 #     print(f"Fold {s['fold']}: train [{tr['date'].min().date()} – {tr['date'].max().date()}] ({len(tr)} rows) | "
 #           f"test [{te['date'].min().date()} – {te['date'].max().date()}] ({len(te)} rows)")
 
-# # from tft-runner
 # tftr = TFTRunner(dfb)
-# # run training
-# tftr.run(splits = splits, target = "CPI") 
+# ckpt = tftr.run(splits=splits, target="CPI")
+# print(f"Best checkpoint: {ckpt}")
 

@@ -33,15 +33,7 @@ class ARRunner:
             return np.exp(np.log(last_val) + np.cumsum(forecast))
         return forecast  # levels: SARIMAX forecast is already in original units
 
-# this is taken care of in main, no?
-    # @staticmethod
-    # def compute_metrics(actual: np.ndarray, predicted: np.ndarray) -> dict:
-    #     errors = actual - predicted
-    #     mae  = np.mean(np.abs(errors))
-    #     rmse = np.sqrt(np.mean(errors ** 2))
-    #     mask = actual != 0
-    #     mape = np.mean(np.abs(errors[mask] / actual[mask])) * 100
-    #     return {"MAE": mae, "RMSE": rmse, "MAPE": mape}
+
     def _fetch_data(self, splits, target: str = "CPI", fold: int = 0):
         train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
         test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
@@ -53,7 +45,7 @@ class ARRunner:
 
         series     = train.set_index("date")[target]
         freq       = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
-        
+
         # TODO: is it a problem that we transform both separately??
         # transform both to stationarity if needed
         stationary, transform = self._transform(series, target)
