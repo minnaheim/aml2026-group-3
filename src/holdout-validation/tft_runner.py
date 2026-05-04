@@ -1,4 +1,7 @@
 import warnings
+from pathlib import Path
+
+import holidays
 import pandas as pd
 import lightning.pytorch as pl
 
@@ -9,7 +12,9 @@ from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 warnings.filterwarnings("ignore")
 
-MACRO_VARS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP", "GBP", "YEN", "FFR"]
+MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP", "GBP", "YEN", "FFR"]
+LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
+LAG_PERIODS = [1, 2, 6, 12]
 
 
 class TFTRunner:
@@ -23,31 +28,67 @@ class TFTRunner:
     def __init__(self, dfb):
         self.dfb = dfb
 
-    def _add_tft_vars(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Add series_id and time_idx — minimum required by TimeSeriesDataSet."""
+    def _add_tft_vars(self, df: pd.DataFrame, target: str) -> pd.DataFrame:
+        """Add series_id, time_idx, calendar features, monthly lags, and target metadata."""
         df = df.copy()
-        # only these 2 are necessary to construct TimeSeriesDataSet
+
         df['series_id'] = 'macro'
         df = df.merge(
             df[['date']].drop_duplicates(ignore_index=True).rename_axis('time_idx').reset_index(),
             on='date',
         )
+
+        # calendar features — known in advance
+        us_holidays = holidays.US()
+        df['day_of_week']  = df['date'].dt.dayofweek
+        df['week_of_year'] = df['date'].dt.isocalendar().week.astype(int)
+        df['month']        = df['date'].dt.month
+        df['is_holiday']   = df['date'].dt.date.apply(lambda d: int(d in us_holidays))
+
+        # monthly lags via merge_asof so the offset is in months, not rows
+        # (row-based lag is meaningless on ffilled daily data)
+        present_lag_vars = [c for c in LAG_VARS if c in df.columns]
+        source = df[['date'] + present_lag_vars].sort_values('date').reset_index(drop=True)
+        for col in present_lag_vars:
+            # GDP is quarterly: lag unit = 1 quarter (3 months); monthly vars: lag unit = 1 month
+            months_per_unit = 3 if col in self.dfb.QUARTERLY_TARGETS else 1
+            for lag in LAG_PERIODS:
+                lookup = pd.DataFrame({
+                    'date':  df['date'] - pd.DateOffset(months=lag * months_per_unit),
+                    '_orig': range(len(df)),
+                }).sort_values('date').reset_index(drop=True)
+                merged = pd.merge_asof(lookup, source[['date', col]], on='date', direction='backward')
+                df[f"{col}_lag_{lag}"] = merged.sort_values('_orig')[col].values
+
+        # drop rows where 12-month lags are still undefined (first ~12 months)
+        df = df.dropna().reset_index(drop=True)
+
+        # static metadata for the target series
+        meta_path = Path(self.dfb.path) / 'data' / 'metadata-macro.csv'
+        meta_raw  = pd.read_csv(meta_path, index_col=1)
+        meta_raw  = meta_raw.rename(index={
+            'CPIAUCSL': 'CPI', 'DEXUSUK': 'GBP', 'DEXJPUS': 'YEN', 'DFF': 'FFR'
+        })
+        train_end = df['date'].max()
+        meta_raw['meta_years_of_history'] = meta_raw['observation_start'].apply(
+            lambda s: max(0.0, (train_end - pd.to_datetime(s)).days / 365.25)
+        )
+        meta = meta_raw[['popularity', 'units_short', 'meta_years_of_history', 'frequency_short']].rename(
+            columns={'popularity': 'meta_popularity', 'units_short': 'meta_units',
+                     'frequency_short': 'meta_frequency'}
+        )
+        if target in meta.index:
+            df = df.assign(**meta.loc[target].to_dict())
+
         return df
 
-    # def _fetch_data(self, splits, target: str = "CPI", fold: int = 0):
-    #     train = self.dfb.get_data(splits, train=True,  model="TFT", target=target, fold=fold)
-    #     test  = self.dfb.get_data(splits, train=False, model="TFT", target=target, fold=fold)
-    #     return train, test
-
-    def create_tft_dataset(self, train_df, target: str,fold,  batch_size: int = 128):
+    def create_tft_dataset(self, train_df, target: str, fold, batch_size: int = 128):
         """Build TimeSeriesDataSet and dataloaders. target is one of MACRO_VARS."""
+        covariates = [v for v in MACRO_VARS if v in train_df.columns]
+        lag_cols   = [f"{c}_lag_{l}" for c in LAG_VARS for l in LAG_PERIODS
+                      if f"{c}_lag_{l}" in train_df.columns]
 
-        # fetch train_df from dfb
-        # train_df, _ = self._fetch_data(splits, target, fold)
-        # print(train_df.columns)
-
-        # create TimeSeriesDataSet (uniquely created for TFT)
-        covariates = [v for v in MACRO_VARS if v in train_df.columns] # target included if it is an unkown real -> ours are!
+        has_meta = 'meta_units' in train_df.columns
 
         training = TimeSeriesDataSet(
             data=train_df,
@@ -56,9 +97,10 @@ class TFTRunner:
             group_ids=['series_id'],
             max_encoder_length=self.MAX_ENCODER_LENGTH,
             max_prediction_length=self.MAX_PREDICTION_LENGTH,
-            static_categoricals=['series_id'],
-            time_varying_known_reals=['time_idx'],
-            time_varying_unknown_reals=covariates,
+            static_categoricals=['series_id'] + (['meta_units', 'meta_frequency'] if has_meta else []),
+            static_reals=(['meta_popularity', 'meta_years_of_history'] if has_meta else []),
+            time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday'],
+            time_varying_unknown_reals=covariates + lag_cols,
             target_normalizer=GroupNormalizer(groups=['series_id'], transformation='softplus'),
             add_relative_time_idx=True,
             add_target_scales=True,
@@ -66,7 +108,6 @@ class TFTRunner:
             allow_missing_timesteps=True,
         )
 
-        # TODO: test this well!!!
         validation = TimeSeriesDataSet.from_dataset(training, train_df, predict=True, stop_randomization=True)
         train_dl   = training.to_dataloader(train=True,  batch_size=batch_size,       num_workers=0)
         val_dl     = validation.to_dataloader(train=False, batch_size=batch_size * 10, num_workers=0)
@@ -126,7 +167,10 @@ class TFTRunner:
         """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
         train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
         print("Got data from data_frame_builder...")
-        train_df  = self._add_tft_vars(train_raw)
+        train_df  = self._add_tft_vars(train_raw, target)
+        # print(train_df.columns)
+        # print(train_df.tail(30))
+
         training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
         print("Created TimeSeriesDataSet for tft...")
         return self.train_tft(training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
@@ -139,7 +183,6 @@ class TFTRunner:
         predictions are made in non-overlapping windows of MAX_PREDICTION_LENGTH days.
         Returns a monthly (or quarterly for GDP) DataFrame with date/actual/predicted/target.
         """
-        # local import to avoid circular import at module level
         from pytorch_forecasting import TemporalFusionTransformer as TFT
 
         map_location = device if device in ("cuda", "mps") else "cpu"
@@ -150,7 +193,7 @@ class TFTRunner:
         test_raw  = self.dfb.get_data(splits, train=False, model='TFT', fold=fold)
 
         # build reference training dataset (data manipulation only — no retraining)
-        train_df    = self._add_tft_vars(train_raw)
+        train_df    = self._add_tft_vars(train_raw, target)
         training_ds, _, _ = self.create_tft_dataset(train_df, target, fold, batch_size)
 
         test_len = len(test_raw)
@@ -167,7 +210,7 @@ class TFTRunner:
             # a full MAX_PREDICTION_LENGTH decoder window to index into.
             context_end = min(start + step, test_len)
             context_raw = pd.concat([train_raw, test_raw.iloc[:context_end]], ignore_index=True)
-            context_df  = self._add_tft_vars(context_raw)
+            context_df  = self._add_tft_vars(context_raw, target)
 
             pred_ds = TimeSeriesDataSet.from_dataset(
                 training_ds, context_df, predict=True, stop_randomization=True
@@ -204,22 +247,20 @@ class TFTRunner:
         return result_df
 
 
-
 # try this out!
-# from data_frame_builder import DataFrameBuilder
+#from data_frame_builder import DataFrameBuilder
 
-# path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
-# dfb  = DataFrameBuilder(path)
-# df   = dfb.process_data()
+#path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
+#dfb  = DataFrameBuilder(path)
+#df   = dfb.process_data()
 
-# splits, holdout = dfb.generate_split(df)
+#splits, holdout = dfb.generate_split(df)
 
-# for s in splits:
-#     tr, te = s["train"], s["test"]
-#     print(f"Fold {s['fold']}: train [{tr['date'].min().date()} – {tr['date'].max().date()}] ({len(tr)} rows) | "
-#           f"test [{te['date'].min().date()} – {te['date'].max().date()}] ({len(te)} rows)")
+#for s in splits:
+#    tr, te = s["train"], s["test"]
+#    print(f"Fold {s['fold']}: train [{tr['date'].min().date()} – {tr['date'].max().date()}] ({len(tr)} rows) | "
+#          f"test [{te['date'].min().date()} – {te['date'].max().date()}] ({len(te)} rows)")
 
 # tftr = TFTRunner(dfb)
 # ckpt = tftr.run(splits=splits, target="CPI")
 # print(f"Best checkpoint: {ckpt}")
-

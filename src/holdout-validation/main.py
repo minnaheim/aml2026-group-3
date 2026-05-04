@@ -22,6 +22,7 @@ from data_frame_builder import DataFrameBuilder
 from benchmark_runner    import ARRunner
 from tft_runner          import TFTRunner
 
+MAIN_TARGETS = ["CPI", "UNRATE", "GDP"]
 ALL_TARGETS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 
 
@@ -102,9 +103,9 @@ def main():
         description="Holdout validation pipeline: AR(1) benchmark vs TFT"
     )
     parser.add_argument(
-        "--targets", nargs="+", default=ALL_TARGETS,
-        choices=ALL_TARGETS, metavar="TARGET",
-        help=f"Targets to forecast. One or more of: {ALL_TARGETS}  (default: all)",
+        "--targets", nargs="+", default=MAIN_TARGETS,
+        choices=MAIN_TARGETS, metavar="TARGET",
+        help=f"Targets to forecast. One or more of: {MAIN_TARGETS}  (default: all)",
     )
     parser.add_argument(
         "--wandb", action="store_true", default=False,
