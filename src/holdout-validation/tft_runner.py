@@ -2,6 +2,7 @@ import warnings
 from pathlib import Path
 
 import holidays
+import numpy as np
 import pandas as pd
 import lightning.pytorch as pl
 
@@ -15,6 +16,8 @@ warnings.filterwarnings("ignore")
 MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP", "GBP", "YEN", "FFR"]
 LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 LAG_PERIODS = [1, 2, 6, 12]
+# same set as benchmark_runner.LOG_DIFF_TARGETS — log only, no differencing for now
+LOG_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"}
 
 
 class TFTRunner:
@@ -37,6 +40,10 @@ class TFTRunner:
             df[['date']].drop_duplicates(ignore_index=True).rename_axis('time_idx').reset_index(),
             on='date',
         )
+
+        # log-transform skewed macro vars before lag computation so lags are also in log space
+        log_cols = [c for c in LOG_TARGETS if c in df.columns]
+        df[log_cols] = np.log(df[log_cols])
 
         # calendar features — known in advance
         us_holidays = holidays.US()
@@ -77,8 +84,10 @@ class TFTRunner:
             columns={'popularity': 'meta_popularity', 'units_short': 'meta_units',
                      'frequency_short': 'meta_frequency'}
         )
-        if target in meta.index:
-            df = df.assign(**meta.loc[target].to_dict())
+        for var in self.dfb.TARGET_COLS:
+            if var in meta.index:
+                for col, val in meta.loc[var].items():
+                    df[f"{var}_{col}"] = val
 
         return df
 
@@ -88,7 +97,12 @@ class TFTRunner:
         lag_cols   = [f"{c}_lag_{l}" for c in LAG_VARS for l in LAG_PERIODS
                       if f"{c}_lag_{l}" in train_df.columns]
 
-        has_meta = 'meta_units' in train_df.columns
+        meta_cat_cols  = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
+                          for c in ('meta_units', 'meta_frequency')
+                          if f"{v}_{c}" in train_df.columns]
+        meta_real_cols = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
+                          for c in ('meta_popularity', 'meta_years_of_history')
+                          if f"{v}_{c}" in train_df.columns]
 
         training = TimeSeriesDataSet(
             data=train_df,
@@ -97,8 +111,8 @@ class TFTRunner:
             group_ids=['series_id'],
             max_encoder_length=self.MAX_ENCODER_LENGTH,
             max_prediction_length=self.MAX_PREDICTION_LENGTH,
-            static_categoricals=['series_id'] + (['meta_units', 'meta_frequency'] if has_meta else []),
-            static_reals=(['meta_popularity', 'meta_years_of_history'] if has_meta else []),
+            static_categoricals=['series_id'] + meta_cat_cols,
+            static_reals=meta_real_cols,
             time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday'],
             time_varying_unknown_reals=covariates + lag_cols,
             target_normalizer=GroupNormalizer(groups=['series_id'], transformation='softplus'),
@@ -227,11 +241,15 @@ class TFTRunner:
             pred_offset = step - window_size
 
             for i in range(window_size):
-                row = test_window.iloc[i]
+                row  = test_window.iloc[i]
+                pred = float(preds_np[0, pred_offset + i])
+                # reverse the logging from before
+                if target in LOG_TARGETS:
+                    pred = np.exp(pred)
                 all_rows.append({
                     "date":      row["date"],
-                    "actual":    float(row[target]),
-                    "predicted": float(preds_np[0, pred_offset + i]),
+                    "actual":    float(row[target]),  # test_raw is original scale
+                    "predicted": pred,
                     "target":    target,
                 })
 
@@ -247,16 +265,17 @@ class TFTRunner:
         return result_df
 
 
-# try this out!
-#from data_frame_builder import DataFrameBuilder
 
-#path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
-#dfb  = DataFrameBuilder(path)
-#df   = dfb.process_data()
+# # try this out!
+# from data_frame_builder import DataFrameBuilder
 
-#splits, holdout = dfb.generate_split(df)
+# path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
+# dfb  = DataFrameBuilder(path)
+# df   = dfb.process_data()
 
-#for s in splits:
+# splits, holdout = dfb.generate_split(df)
+
+# for s in splits:
 #    tr, te = s["train"], s["test"]
 #    print(f"Fold {s['fold']}: train [{tr['date'].min().date()} – {tr['date'].max().date()}] ({len(tr)} rows) | "
 #          f"test [{te['date'].min().date()} – {te['date'].max().date()}] ({len(te)} rows)")
