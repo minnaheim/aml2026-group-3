@@ -13,3 +13,5 @@ src/lightning_logs
 
 checkpoints
 wandb
+
+**/*lightning_logs
