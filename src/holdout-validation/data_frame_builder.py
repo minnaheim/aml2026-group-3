@@ -55,7 +55,7 @@ class DataFrameBuilder:
     df = df.iloc[start_idx:].reset_index(drop=True)
 
     print(f"\nDate range: {df['date'].min()} to {df['date'].max()}, {len(df)} rows")
-    print(df.head(10))
+    # print(df.head(10))
 
     return df
   
