@@ -11,11 +11,14 @@
 - [ ] Additional metadata from FRED
 
 ### BENCHMARKS
-- [ ] Get AR(p) process running
+- [x] Get AR(p) process running
 
 ### EVAL METRICS
 - [ ] For all models: add expanding window (so far: only sliding window)
 
+
+### CV PIPELINE
+- [ ] Get up and running!! (WIP)
 
 ## Decisions
 ### Speech Data
@@ -32,5 +35,6 @@
 
  ## Things that might come up later
  - Daily data: we have business day daily data (5-day week for exchange rates, so what is traded on the market) and 7-day week (including holidays)
+ - Potentially have a gap between train and test data to account for the fact that some data series are published with a lag but there are spot forecasts etc.
 
 
