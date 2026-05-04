@@ -38,7 +38,8 @@ BATCH_SIZE       = 128
 MAX_ENCODER_LEN  = 48 * 30 # approx 4 years lookback
 MAX_PRED_LEN     = 12 * 30 # approx 12 months forecast
 
-LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
+LAG_VARS    = ["CPI"#, "PAYEMS", "INDPRO", "UNRATE", "GDP"
+               ]
 LAG_PERIODS = [1, 2, 6, 12]
 
 
@@ -185,11 +186,12 @@ class TFTRunner:
         results = []
         idx = ds_val.get_parameters()["group_ids"]  # series order
         for var in LAG_VARS:
+            encoded_var = ds_val.transform_values("series_id", [var])[0]
             sample_idxs = [
                 i for i, s in enumerate(preds_out.x["groups"][:, 0].tolist())
-                if ds_val.transform_values("series_id", [var], inverse=True) == [s]
-                # fallback: match by series_id encoding
+                if s == encoded_var
             ]
+            
             # simpler approach: filter test_long by series
             actual    = test_long[test_long["series_id"] == var]["value"].values
             # predicted mean from quantile output — shape [n_samples, pred_len]
@@ -220,3 +222,23 @@ splits, holdout = dfb.generate_split(df)
 runner = TFTRunner(dfb)
 result = runner.run(splits, fold=0)
 print(result)
+
+
+# # plot the result 
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+out_dir = Path(path) / "out" / "tft"
+out_dir.mkdir(parents=True, exist_ok=True)
+
+cpi_results = result[result['target'] == 'CPI']
+
+fig, ax = plt.subplots(figsize=(12, 4))
+ax.plot(cpi_results["date"], cpi_results["actual"],    label="Actual",    color="black",  linewidth=1.5)
+ax.plot(cpi_results["date"], cpi_results["predicted"], label="Predicted", color="crimson", linewidth=1.5, linestyle="--")
+ax.set_title(f"TFT — {cpi_results['target'].iloc[0]}: Predicted vs Actual")
+ax.set_xlabel("Date")
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.savefig(out_dir / f"tft_{cpi_results['target'].iloc[0].lower()}.png", bbox_inches="tight")
