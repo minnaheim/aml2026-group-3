@@ -152,7 +152,7 @@ class TFTRunner:
             accelerator=accelerator,
             devices=1,
             gradient_clip_val=0.25,
-            limit_train_batches=5,
+            # limit_train_batches=5,
             callbacks=callbacks,
             enable_model_summary=True,
             logger=logger,
