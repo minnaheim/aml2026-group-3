@@ -9,12 +9,14 @@
 
 ### TFT
 - [ ] Additional metadata from FRED
+- [ ] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
 
 ### BENCHMARKS
 - [x] Get AR(p) process running
 
 ### EVAL METRICS
-- [ ] For all models: add expanding window (so far: only sliding window)
+- [ ] For AR / ARIMA: expanding / rolling window
+- [ ] For TFT: one-holdout
 
 
 ### CV PIPELINE
@@ -36,5 +38,6 @@
  ## Things that might come up later
  - Daily data: we have business day daily data (5-day week for exchange rates, so what is traded on the market) and 7-day week (including holidays)
  - Potentially have a gap between train and test data to account for the fact that some data series are published with a lag but there are spot forecasts etc.
+  - At least, this is the case in Switzerland and many other European countries, in particular for GDP
 
 
