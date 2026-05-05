@@ -8,7 +8,14 @@ from pathlib import Path
 SPEECH_WINDOW_MONTHS = 12
 
 class DataFrameBuilder:
-  def __init__(self, path:  str | None = None):
+
+  # define which embeddings exist
+  # should accomodate roberta, finbert, kafka, reshuffling, ...
+  EMBEDDING_REGISTRY = {
+      "fomc-roberta": "data/embeddings/fomc-roberta/embeddings_pca_mean_full_fomc-roberta.csv",
+  }  
+  
+  def __init__(self, path: str | None = None, embedding: str | None = None):
     if path is None:
       self.path = os.getcwd()
     else:
@@ -18,10 +25,11 @@ class DataFrameBuilder:
     # data without holdout
     self.TRAIN_DEC = 0.8
     self.TARGET_COLS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
-    self.QUARTERLY_TARGETS = {"GDP"}          # native quarterly frequency
+    self.QUARTERLY_TARGETS = {"GDP"} # quarterly frequency
     self.MONTHLY_TARGETS   = {"CPI", "PAYEMS", "INDPRO", "UNRATE"}
     
     # populated by load_speech_embeddings(); None means speeches not loaded.
+    self._embedding_name = embedding
     self.speeches_df: pd.DataFrame | None = None
     self.pca_cols: list[str] = []
 
@@ -36,8 +44,8 @@ class DataFrameBuilder:
   # load speech embeddings based on chris's logic
   def load_speech_embeddings(
         self,
-        embedding_subpath: str = "data/embeddings/fomc-roberta/"
-                                 "embeddings_pca_mean_full_fomc-roberta.csv",
+        embedding_subpath: str | None = None,
+        name: str | None = None,
     ) -> "DataFrameBuilder":
         """Load FOMC speech PCA embeddings and cache them on the instance.
  
@@ -56,6 +64,13 @@ class DataFrameBuilder:
         embedding_subpath :
             Path to the PCA CSV relative to self.path.
         """
+        if name is not None:
+            if name not in self.EMBEDDING_REGISTRY:
+                raise ValueError(f"Unknown embedding '{name}'. Choose from: {list(self.EMBEDDING_REGISTRY)}")
+            embedding_subpath = self.EMBEDDING_REGISTRY[name]
+        elif embedding_subpath is None:
+            embedding_subpath = self.EMBEDDING_REGISTRY["fomc-roberta"]
+        
         speech_path = Path(self.path) / embedding_subpath
         if not speech_path.exists():
             raise FileNotFoundError(
@@ -163,7 +178,10 @@ class DataFrameBuilder:
     
     # ------ speech embeddings (optional) -------
     # only if load_speech_embeddings() was called beforehand.
-    if self.speeches_df is not None:
+    if self._embedding_name is not None:
+        self.load_speech_embeddings(name=self._embedding_name)
+
+    if self.speeches_df is not None:  # catches both paths
         df = self._add_speech_features(df)
         
     # trim leading NaNs

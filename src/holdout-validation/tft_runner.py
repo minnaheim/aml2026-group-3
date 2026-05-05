@@ -39,10 +39,7 @@ class TFTRunner:
             be included as time-varying unknown reals.  Otherwise the runner
             operates in macro-only mode.
         """
-        self.dfb      = dfb
-        # pca_cols is [] when speeches were not loaded
-        self.pca_cols = dfb.pca_cols
-
+        self.dfb = dfb
 
     def _add_tft_vars(self, df: pd.DataFrame, target: str) -> pd.DataFrame:
         """Add series_id, time_idx, calendar features, monthly lags, and target metadata."""
@@ -116,7 +113,7 @@ class TFTRunner:
                       if f"{c}_lag_{l}" in train_df.columns]
         
         # if pca present
-        pca_cols_present = [c for c in self.pca_cols if c in train_df.columns]
+        pca_cols_present = [c for c in self.dfb.pca_cols if c in train_df.columns]
 
         meta_cat_cols  = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
                           for c in ('meta_units', 'meta_frequency')
@@ -293,8 +290,14 @@ class TFTRunner:
 
 # # path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
 # path = r"C:\Users\annaz\OneDrive\Dokumente\Studium\UZH_Master\2026FS\Advanced Machine Learning\Practical_Assignment\aml2026-group-3"
-# #dfb  = DataFrameBuilder(path)#.load_speech_embeddings() 
-# dfb  = DataFrameBuilder(path).load_speech_embeddings() # uncomment if with speeches
+
+# # # without speeches
+# # dfb  = DataFrameBuilder(path) 
+
+# # with speeches
+# # right now, only fomc roberta is on github; will allow for finbert later on AND kafka speeches + reshuffling
+# # then, update embeddings registry in data_frame_builder.py
+# dfb  = DataFrameBuilder(path, embedding="fomc-roberta")
 # df   = dfb.process_data()
 
 # splits, holdout = dfb.generate_split(df)
