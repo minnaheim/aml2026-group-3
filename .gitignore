@@ -15,3 +15,15 @@ checkpoints
 wandb
 
 **/*lightning_logs
+
+lightning_logs/
+__pycache__/
+*.pyc
+out/
+
+# also don't commit data files unzipped
+data/cleaned_speeches.csv
+data/speeches_with_metadata.csv
+data/us_speeches/__MACOSX/
+data/us_speeches/._us_speeches.csv
+data/us_speeches/us_speeches.csv

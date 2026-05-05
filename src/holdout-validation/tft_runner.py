@@ -7,7 +7,7 @@ import pandas as pd
 import lightning.pytorch as pl
 
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
-from pytorch_forecasting.data import GroupNormalizer
+from pytorch_forecasting.data import EncoderNormalizer # switched from group normalizer
 from pytorch_forecasting.metrics import SMAPE
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
@@ -22,13 +22,23 @@ LOG_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"}
 
 class TFTRunner:
     # hyperparams matching initial tryout at  tft-macro.ipynb
-    MAX_ENCODER_LENGTH    = 720   # 2-year lookback
-    MAX_PREDICTION_LENGTH = 90   # 3-month forecast horizon
-    PATIENCE      = 5
-    MAX_EPOCHS    = 40
+    # UPDATED: Change from days to months
+    MAX_ENCODER_LENGTH = 24 # 2-year monthly lookback
+    MAX_PREDICTION_LENGTH = 12 # 12-month forecast horizon
+    PATIENCE = 5
+    MAX_EPOCHS = 3
     LEARNING_RATE = 0.03
 
     def __init__(self, dfb):
+        """
+        Parameters
+        ----------
+        dfb : DataFrameBuilder
+            If dfb.load_speech_embeddings() was called before process_data(),
+            dfb.pca_cols will be non-empty and those columns will automatically
+            be included as time-varying unknown reals.  Otherwise the runner
+            operates in macro-only mode.
+        """
         self.dfb = dfb
 
     def _add_tft_vars(self, df: pd.DataFrame, target: str) -> pd.DataFrame:
@@ -92,10 +102,18 @@ class TFTRunner:
         return df
 
     def create_tft_dataset(self, train_df, target: str, fold, batch_size: int = 128):
-        """Build TimeSeriesDataSet and dataloaders. target is one of MACRO_VARS."""
+        """
+            Build TimeSeriesDataSet and dataloaders. 
+            Target is one of MACRO_VARS.
+            PCA columns are picked from train_df and appended 
+            to time_varying_unknown_reals
+        """
         covariates = [v for v in MACRO_VARS if v in train_df.columns]
         lag_cols   = [f"{c}_lag_{l}" for c in LAG_VARS for l in LAG_PERIODS
                       if f"{c}_lag_{l}" in train_df.columns]
+        
+        # if pca present
+        pca_cols_present = [c for c in self.dfb.pca_cols if c in train_df.columns]
 
         meta_cat_cols  = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
                           for c in ('meta_units', 'meta_frequency')
@@ -114,8 +132,9 @@ class TFTRunner:
             static_categoricals=['series_id'] + meta_cat_cols,
             static_reals=meta_real_cols,
             time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday'],
-            time_varying_unknown_reals=covariates + lag_cols,
-            target_normalizer=GroupNormalizer(groups=['series_id'], transformation='softplus'),
+            # speeches are time varying, so i add them here!
+            time_varying_unknown_reals=covariates + lag_cols + pca_cols_present,
+            target_normalizer=EncoderNormalizer(transformation="softplus"),
             add_relative_time_idx=True,
             add_target_scales=True,
             add_encoder_length=True,
@@ -152,7 +171,7 @@ class TFTRunner:
             accelerator=accelerator,
             devices=1,
             gradient_clip_val=0.25,
-            limit_train_batches=30,
+            limit_train_batches=5,
             callbacks=callbacks,
             enable_model_summary=True,
             logger=logger,
@@ -269,8 +288,16 @@ class TFTRunner:
 # # try this out!
 # from data_frame_builder import DataFrameBuilder
 
-# path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
-# dfb  = DataFrameBuilder(path)
+# # path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
+# path = r"C:\Users\annaz\OneDrive\Dokumente\Studium\UZH_Master\2026FS\Advanced Machine Learning\Practical_Assignment\aml2026-group-3"
+
+# # # without speeches
+# # dfb  = DataFrameBuilder(path) 
+
+# # with speeches
+# # right now, only fomc roberta is on github; will allow for finbert later on AND kafka speeches + reshuffling
+# # then, update embeddings registry in data_frame_builder.py
+# dfb  = DataFrameBuilder(path, embedding="fomc-roberta")
 # df   = dfb.process_data()
 
 # splits, holdout = dfb.generate_split(df)
@@ -281,5 +308,21 @@ class TFTRunner:
 #          f"test [{te['date'].min().date()} – {te['date'].max().date()}] ({len(te)} rows)")
 
 # tftr = TFTRunner(dfb)
-# ckpt = tftr.run(splits=splits, target="CPI")
+# ckpt = tftr.run(splits=splits, target="CPI", device = 'cpu', batch_size = 64)
 # print(f"Best checkpoint: {ckpt}")
+
+
+# # look at results
+# preds = tftr.predict(ckpt, splits=splits, target="CPI", batch_size = 64)
+
+# import matplotlib.pyplot as plt
+
+# fig, ax = plt.subplots(figsize=(12, 4))
+# ax.plot(preds["date"], preds["actual"],    label="Actual",    color="steelblue")
+# ax.plot(preds["date"], preds["predicted"], label="Predicted", color="tomato", linestyle="--")
+# ax.set_title("TFT — CPI (test period)")
+# ax.set_xlabel("Date")
+# ax.set_ylabel("CPI")
+# ax.legend()
+# plt.tight_layout()
+# plt.show()
