@@ -9,3 +9,8 @@ By: Anna, Chris and Minna
 ### specifying a target and including weights and biases and running on 'cuda':
 
 `python src/holdout-validation/main.py --target CPI --wandb --device cuda`
+
+
+### default targets, including weights and biases and running on 'cuda':
+
+`python src/holdout-validation/main.py --wandb --device cuda`

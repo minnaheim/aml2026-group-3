@@ -22,8 +22,8 @@ LOG_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"}
 
 class TFTRunner:
     # hyperparams matching initial tryout at  tft-macro.ipynb
-    MAX_ENCODER_LENGTH    = 48 * 30   # 4-year lookback
-    MAX_PREDICTION_LENGTH = 12 * 30   # 12-month forecast horizon
+    MAX_ENCODER_LENGTH    = 720   # 2-year lookback
+    MAX_PREDICTION_LENGTH = 90   # 3-month forecast horizon
     PATIENCE      = 5
     MAX_EPOCHS    = 40
     LEARNING_RATE = 0.03
@@ -152,7 +152,7 @@ class TFTRunner:
             accelerator=accelerator,
             devices=1,
             gradient_clip_val=0.25,
-            # limit_train_batches=5,
+            limit_train_batches=30,
             callbacks=callbacks,
             enable_model_summary=True,
             logger=logger,
