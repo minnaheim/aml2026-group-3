@@ -1,10 +1,10 @@
-#!/usr/bin/env python
-# coding: utf-8
+# #!/usr/bin/env python
+# # coding: utf-8
 
-# # AR(1)
-# Macro-only benchmark: AR(1) models capture one-lag persistence in macroeconomic dynamics. In this project, AR(1) serves as a transparent classical baseline for GDP growth and inflation forecasts, allowing us to test whether text-enhanced TFT improves beyond a strong traditional time-series model.
-# 
-# Reference: Box, G.; Jenkins, G.M. Time Series Analysis; Forecasting and Control; Holden-Day: San Francisco, CA, USA, 1970.
+# # # AR(1)
+# # Macro-only benchmark: AR(1) models capture one-lag persistence in macroeconomic dynamics. In this project, AR(1) serves as a transparent classical baseline for GDP growth and inflation forecasts, allowing us to test whether text-enhanced TFT improves beyond a strong traditional time-series model.
+# # 
+# # Reference: Box, G.; Jenkins, G.M. Time Series Analysis; Forecasting and Control; Holden-Day: San Francisco, CA, USA, 1970.
 
 # set-up
 import pandas as pd
@@ -52,119 +52,109 @@ dataframes = {
     "Quarterly": df_quarterly
 }
 
-# get frequency mapping
+# # get frequency mapping
 freq_map = {'Monthly': 'MS', 'Daily_5day': 'B', 'Daily_7day': 'D', 'Weekly': 'W-WED', 'Quarterly': 'QS'}
-# W-WED since weekly data recorded on wednesdays
-# B for business day daily data since we care about business days not 7-day week!
+# # W-WED since weekly data recorded on wednesdays
+# # B for business day daily data since we care about business days not 7-day week!
 
 for name, df in dataframes.items():
-    # rename first column into date column
     if 'Unnamed: 0' in df.columns:
         df.rename(columns={'Unnamed: 0': 'Date'}, inplace=True)
-    
-    # set the index
     if 'Date' in df.columns:
         df.set_index('Date', inplace=True)
-    
-    # index as date format
     df.index = pd.to_datetime(df.index)
-    
-    # filter date range
     dataframes[name] = df.loc[df.index <= '2026-02-01'].copy()
-    
-    # set frequency, depending on df
     dataframes[name] = dataframes[name].asfreq(freq_map[name])
-    
     print(f"{name} processed. Shape: {dataframes[name].shape}")
 
-# initialize
-adf_summary = []
+# # initialize
+# adf_summary = []
 
-# first: stationarity? likely not with trend variables
-for name, df in dataframes.items():
-    for col in df.columns:
-        # Drop NaNs for each specific column to avoid errors
-        result = adfuller(df[col].dropna())
+# # first: stationarity? likely not with trend variables
+# for name, df in dataframes.items():
+#     for col in df.columns:
+#         # Drop NaNs for each specific column to avoid errors
+#         result = adfuller(df[col].dropna())
         
-        series = df[col].dropna()
-        if len(series) > 5:
-            result = adfuller(series)
-            p_val = result[1]
-            adf_summary.append({
-                'Frequency': name,
-                'Variable': col,
-                'p-value': round(p_val, 4),
-                'Stationary': 'Yes' if p_val < 0.05 else 'No'
-            })
+#         series = df[col].dropna()
+#         if len(series) > 5:
+#             result = adfuller(series)
+#             p_val = result[1]
+#             adf_summary.append({
+#                 'Frequency': name,
+#                 'Variable': col,
+#                 'p-value': round(p_val, 4),
+#                 'Stationary': 'Yes' if p_val < 0.05 else 'No'
+#             })
         
         
-# view as a clean summary table
-results_df = pd.DataFrame(adf_summary)
-print(results_df.sort_values(by=['Frequency', 'Stationary']))
+# # view as a clean summary table
+# results_df = pd.DataFrame(adf_summary)
+# print(results_df.sort_values(by=['Frequency', 'Stationary']))
 
-# stationary: YES, T10Y2Y, FFR
+# # stationary: YES, T10Y2Y, FFR
 
 log_cols = ['CPI', 'PCEPI', 'JTSJOL', 'PAYEMS', 'INDPRO', 'GDP', 'EUR', 'GBP', 'WALCL'] # strictly positive, makes sense to log since want growth rate
 diff_only = ['UMCSENT', 'SOFR'] # difference without log (already an index)
 
-# dictionary to store different stationarity results
-stationary_results = []
+# # dictionary to store different stationarity results
+# stationary_results = []
 
 
-for freq_name, df in dataframes.items():
-    print(f"\n--- Testing Transformations for {freq_name} ---")
+# for freq_name, df in dataframes.items():
+#     print(f"\n--- Testing Transformations for {freq_name} ---")
     
-    for col in df.columns:
-        series = df[col].dropna()
+#     for col in df.columns:
+#         series = df[col].dropna()
         
-        # log difference
-        if col in log_cols:
-            transformed = np.log(series).diff().dropna()
-            label = "log_diff"
+#         # log difference
+#         if col in log_cols:
+#             transformed = np.log(series).diff().dropna()
+#             label = "log_diff"
             
-        # simple difference only
-        elif col in diff_only:
-            transformed = series.diff().dropna()
-            label = "diff only"
+#         # simple difference only
+#         elif col in diff_only:
+#             transformed = series.diff().dropna()
+#             label = "diff only"
             
-        # if stationary, skip
-        else:
-            continue
+#         # if stationary, skip
+#         else:
+#             continue
 
-        # again, adf to check for stationarity
-        if len(transformed) > 5:
-            pval = adfuller(transformed)[1]
-            is_stationary = "Yes" if pval < 0.05 else "No"
+#         # again, adf to check for stationarity
+#         if len(transformed) > 5:
+#             pval = adfuller(transformed)[1]
+#             is_stationary = "Yes" if pval < 0.05 else "No"
             
-            print(f"{col} ({label}): p = {pval:.6f} | Stationary: {is_stationary}")
+#             print(f"{col} ({label}): p = {pval:.6f} | Stationary: {is_stationary}")
             
-            stationary_results.append({
-                'Frequency': freq_name,
-                'Variable': col,
-                'Method': label,
-                'p-value': round(pval, 6),
-                'Stationary': is_stationary
-            })
+#             stationary_results.append({
+#                 'Frequency': freq_name,
+#                 'Variable': col,
+#                 'Method': label,
+#                 'p-value': round(pval, 6),
+#                 'Stationary': is_stationary
+#             })
 
-# look at summary
-transformation_summary = pd.DataFrame(stationary_results)
+# # look at summary
+# transformation_summary = pd.DataFrame(stationary_results)
 
-# SOFR still isn't stationary
-# this is relatively unsurprising
-# it's very volatile and the time horizon is fairly long
-# check if second differencing works
-# interpretation = how much does the change in the interest rate (SOFR) accelerate?
+# # SOFR still isn't stationary
+# # this is relatively unsurprising
+# # it's very volatile and the time horizon is fairly long
+# # check if second differencing works
+# # interpretation = how much does the change in the interest rate (SOFR) accelerate?
 
-df_businessdays['SOFR_diff2'] = df_businessdays['SOFR'].diff().diff().dropna()
+# df_businessdays['SOFR_diff2'] = df_businessdays['SOFR'].diff().diff().dropna()
 
-# check adf again
-sofr_2_clean = df_businessdays['SOFR_diff2'].dropna()
-result = adfuller(sofr_2_clean)
+# # check adf again
+# sofr_2_clean = df_businessdays['SOFR_diff2'].dropna()
+# result = adfuller(sofr_2_clean)
 
-print(f"SOFR Second Difference p-value: {result[1]:.6f}")
-# yes, looks good now!
+# print(f"SOFR Second Difference p-value: {result[1]:.6f}")
+# # yes, looks good now!
 
-# overwrite the differencing variable
+# # overwrite the differencing variable
 first_diff = ['UMCSENT'] # difference without log (already an index)
 second_diff = ['SOFR'] # second difference
 
@@ -194,9 +184,9 @@ for name, df in dataframes.items():
     stationary_dfs[name] = df_stat
 
 
-#------------------------------------------------------------------
-# ARIMA: Pseudo-Forecasting
-#------------------------------------------------------------------
+# #------------------------------------------------------------------
+# # ARIMA: Pseudo-Forecasting
+# #------------------------------------------------------------------
 
 
 # set-up
@@ -208,339 +198,339 @@ forecast_config = {
     'Quarterly': 4    # 1 year
 }
 
-seasonal_periods = {
-    'Monthly': 12, 
-    'Weekly': 52, 
-    'Daily_5day': 5,
-    'Daily_7day': 7, 
-    'Quarterly': 4
-}
+# seasonal_periods = {
+#     'Monthly': 12, 
+#     'Weekly': 52, 
+#     'Daily_5day': 5,
+#     'Daily_7day': 7, 
+#     'Quarterly': 4
+# }
 
-all_models = {}
-all_forecasts = {}
-all_conf_ints = {}
+# all_models = {}
+# all_forecasts = {}
+# all_conf_ints = {}
 
-for freq_name, df in stationary_dfs.items():
-    n_steps = forecast_config[freq_name]
+# for freq_name, df in stationary_dfs.items():
+#     n_steps = forecast_config[freq_name]
     
-    print(f"Fitting models for {freq_name} data (Holding out {n_steps} periods)...")
+#     print(f"Fitting models for {freq_name} data (Holding out {n_steps} periods)...")
     
-    # frequency-specific storage
-    all_models[freq_name] = {}
-    all_forecasts[freq_name] = {}
-    all_conf_ints[freq_name] = {}
+#     # frequency-specific storage
+#     all_models[freq_name] = {}
+#     all_forecasts[freq_name] = {}
+#     all_conf_ints[freq_name] = {}
 
-    for col in df.columns:
-        series = df[col].asfreq(freq_map[freq_name])
+#     for col in df.columns:
+#         series = df[col].asfreq(freq_map[freq_name])
         
-        # train/test split
-        train = series.iloc[:-n_steps]
-        test = series.iloc[-n_steps:] # for validation
+#         # train/test split
+#         train = series.iloc[:-n_steps]
+#         test = series.iloc[-n_steps:] # for validation
         
-        # define and fit
-        # Fixed AR(1): ARIMA(1,0,0) without seasonal terms.
-        model = SARIMAX(train,
-                order=(1, 0, 0),
-                seasonal_order=(0, 0, 0, 0),
-                        enforce_stationarity=False,
-                        enforce_invertibility=False)
+#         # define and fit
+#         # Fixed AR(1): ARIMA(1,0,0) without seasonal terms.
+#         model = SARIMAX(train,
+#                 order=(1, 0, 0),
+#                 seasonal_order=(0, 0, 0, 0),
+#                         enforce_stationarity=False,
+#                         enforce_invertibility=False)
         
-        res = model.fit(disp=False)
-        all_models[freq_name][col] = res
+#         res = model.fit(disp=False)
+#         all_models[freq_name][col] = res
         
-        # Get Forecast
-        forecast_obj = res.get_forecast(steps=n_steps)
-        all_forecasts[freq_name][col] = forecast_obj.predicted_mean
-        all_conf_ints[freq_name][col] = forecast_obj.conf_int()
+#         # Get Forecast
+#         forecast_obj = res.get_forecast(steps=n_steps)
+#         all_forecasts[freq_name][col] = forecast_obj.predicted_mean
+#         all_conf_ints[freq_name][col] = forecast_obj.conf_int()
 
-print("All models fitted successfully.")
+# print("All models fitted successfully.")
 
 
 
-# --- Forecast errors ---
-evaluation_results = []
+# # --- Forecast errors ---
+# evaluation_results = []
 
-for freq_name, df in stationary_dfs.items():
-    n_steps = forecast_config[freq_name]
+# for freq_name, df in stationary_dfs.items():
+#     n_steps = forecast_config[freq_name]
     
-    for col in df.columns:
-        actual = df[col].iloc[-n_steps:] # last n_steps of stationary data
-        pred = all_forecasts[freq_name][col] #
+#     for col in df.columns:
+#         actual = df[col].iloc[-n_steps:] # last n_steps of stationary data
+#         pred = all_forecasts[freq_name][col] #
         
-        # errors
-        error = pred - actual
-        mae = error.abs().mean()
-        rmse = (error ** 2).mean() ** 0.5
+#         # errors
+#         error = pred - actual
+#         mae = error.abs().mean()
+#         rmse = (error ** 2).mean() ** 0.5
         
-        # normalized RMSE
-        # using the standard deviation of the entire data series
-        data_std = df[col].std()
-        nrmse = rmse / data_std if data_std != 0 else np.nan
+#         # normalized RMSE
+#         # using the standard deviation of the entire data series
+#         data_std = df[col].std()
+#         nrmse = rmse / data_std if data_std != 0 else np.nan
         
-        evaluation_results.append({
-            'Frequency': freq_name,
-            'Variable': col,
-            'MAE': round(mae, 6),
-            'RMSE': round(rmse, 6),
-            'NRMSE': round(nrmse, 6)
-        })
+#         evaluation_results.append({
+#             'Frequency': freq_name,
+#             'Variable': col,
+#             'MAE': round(mae, 6),
+#             'RMSE': round(rmse, 6),
+#             'NRMSE': round(nrmse, 6)
+#         })
 
-# summary table
-error_report = pd.DataFrame(evaluation_results)
+# # summary table
+# error_report = pd.DataFrame(evaluation_results)
 
-# sort by NRMSE to see how models are ranked
-print(error_report.sort_values(by='NRMSE'))
+# # sort by NRMSE to see how models are ranked
+# print(error_report.sort_values(by='NRMSE'))
 
 
-# --- Plots ---
-for freq_name, df in stationary_dfs.items():
-    cols = df.columns
-    n_vars = len(cols)
-    n_steps = forecast_config[freq_name]
+# # --- Plots ---
+# for freq_name, df in stationary_dfs.items():
+#     cols = df.columns
+#     n_vars = len(cols)
+#     n_steps = forecast_config[freq_name]
     
-    # 1. Setup figure
-    n_cols = 2
-    n_rows = int(np.ceil(n_vars / n_cols))
+#     # 1. Setup figure
+#     n_cols = 2
+#     n_rows = int(np.ceil(n_vars / n_cols))
     
-    # Use squeeze=False to ensure axes is ALWAYS a 2D array, 
-    # which makes flattening predictable
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, n_rows * 4), squeeze=False)
-    fig.suptitle(f"Forecasts for {freq_name} Variables", fontsize=16, fontweight='bold')
+#     # Use squeeze=False to ensure axes is ALWAYS a 2D array, 
+#     # which makes flattening predictable
+#     fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, n_rows * 4), squeeze=False)
+#     fig.suptitle(f"Forecasts for {freq_name} Variables", fontsize=16, fontweight='bold')
     
-    # Flatten the 2D array into a 1D list of axes
-    flat_axes = axes.flatten()
+#     # Flatten the 2D array into a 1D list of axes
+#     flat_axes = axes.flatten()
 
-    for i, col in enumerate(cols):
-        ax = flat_axes[i]
+#     for i, col in enumerate(cols):
+#         ax = flat_axes[i]
         
-        # Extract Data
-        full_series = df[col]
-        train_slice = full_series.iloc[:-n_steps]
-        test_slice = full_series.iloc[-n_steps:]
+#         # Extract Data
+#         full_series = df[col]
+#         train_slice = full_series.iloc[:-n_steps]
+#         test_slice = full_series.iloc[-n_steps:]
         
-        # Get predictions from our nested dicts
-        forecast_series = all_forecasts[freq_name][col]
-        ci = all_conf_ints[freq_name][col]
+#         # Get predictions from our nested dicts
+#         forecast_series = all_forecasts[freq_name][col]
+#         ci = all_conf_ints[freq_name][col]
         
-        # Calculate local RMSE
-        rmse_val = (((forecast_series - test_slice) ** 2).mean()) ** 0.5
+#         # Calculate local RMSE
+#         rmse_val = (((forecast_series - test_slice) ** 2).mean()) ** 0.5
 
-        # 2. Plotting (using the axis 'ax' explicitly)
-        context_window = 60 if freq_name == 'Daily' else 24
+#         # 2. Plotting (using the axis 'ax' explicitly)
+#         context_window = 60 if freq_name == 'Daily' else 24
         
-        # Plot history
-        ax.plot(train_slice.index[-context_window:], train_slice.values[-context_window:], 
-                label='Train', color='steelblue')
+#         # Plot history
+#         ax.plot(train_slice.index[-context_window:], train_slice.values[-context_window:], 
+#                 label='Train', color='steelblue')
         
-        # Plot actuals
-        ax.plot(test_slice.index, test_slice.values, 
-                label='Actual', color='black', linewidth=1.5)
+#         # Plot actuals
+#         ax.plot(test_slice.index, test_slice.values, 
+#                 label='Actual', color='black', linewidth=1.5)
         
-        # Plot forecast
-        ax.plot(forecast_series.index, forecast_series.values, 
-                label='Forecast', color='crimson', linestyle='--')
+#         # Plot forecast
+#         ax.plot(forecast_series.index, forecast_series.values, 
+#                 label='Forecast', color='crimson', linestyle='--')
 
-        # Confidence Interval
-        ax.fill_between(ci.index, ci.iloc[:, 0], ci.iloc[:, 1], alpha=0.15, color='crimson')
+#         # Confidence Interval
+#         ax.fill_between(ci.index, ci.iloc[:, 0], ci.iloc[:, 1], alpha=0.15, color='crimson')
 
-        # Formatting
-        ax.set_title(f"{col} | RMSE: {rmse_val:.4f}", fontsize=11)
-        ax.legend(loc='upper left', fontsize=8)
-        ax.grid(alpha=0.2)
+#         # Formatting
+#         ax.set_title(f"{col} | RMSE: {rmse_val:.4f}", fontsize=11)
+#         ax.legend(loc='upper left', fontsize=8)
+#         ax.grid(alpha=0.2)
 
-    # 3. Hide unused subplots in the grid
-    for j in range(i + 1, len(flat_axes)):
-        flat_axes[j].set_visible(False)
+#     # 3. Hide unused subplots in the grid
+#     for j in range(i + 1, len(flat_axes)):
+#         flat_axes[j].set_visible(False)
 
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.close()
-
-
-#------------------------------------------------------------------
-# Rolling Window Approach
-#------------------------------------------------------------------
-
-# DEFINE helpers
-
-def get_folds(df, n_folds, max_horizon=12):
-  """Generate train/test splits, each test window = max_horizon months"""
-  n = len(df)
-  test_size = max_horizon
-  # space folds evenly across the series
-  # here, we luckily don't have to worry about data frequency since i am only using monthly data
-  # for now!
-  fold_ends = np.linspace(n - n_folds * test_size, n - test_size, n_folds, dtype=int)
-
-  folds = []
-  for end in fold_ends:
-      train = df.iloc[:end]
-      test = df.iloc[end:end + test_size]
-      folds.append((train, test))
-  return folds
+#     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+#     plt.close()
 
 
-def fit_and_forecast(train_series, horizon):
-  train_series = train_series.dropna()
-  model = SARIMAX(train_series,
-                                    order=(1, 0, 0),
-                                    seasonal_order=(0, 0, 0, 0),
-                  enforce_stationarity=False,
-                  enforce_invertibility=False)
-  result = model.fit(maxiter = 250,
-                     disp=False)
-  forecast = result.get_forecast(steps=horizon)
-  return forecast.predicted_mean
+# #------------------------------------------------------------------
+# # Rolling Window Approach
+# #------------------------------------------------------------------
+
+# # DEFINE helpers
+
+# def get_folds(df, n_folds, max_horizon=12):
+#   """Generate train/test splits, each test window = max_horizon months"""
+#   n = len(df)
+#   test_size = max_horizon
+#   # space folds evenly across the series
+#   # here, we luckily don't have to worry about data frequency since i am only using monthly data
+#   # for now!
+#   fold_ends = np.linspace(n - n_folds * test_size, n - test_size, n_folds, dtype=int)
+
+#   folds = []
+#   for end in fold_ends:
+#       train = df.iloc[:end]
+#       test = df.iloc[end:end + test_size]
+#       folds.append((train, test))
+#   return folds
 
 
-def compute_metrics(actual, predicted):
-  errors = actual.values - predicted.values
-  mae  = np.mean(np.abs(errors))
-  rmse = np.sqrt(np.mean(errors ** 2))
-  # mask zeros to avoid division issues in MAPE
-  mask = actual.values != 0
-  mape = np.mean(np.abs(errors[mask] / actual.values[mask])) * 100
-  return {"MAE": mae, "RMSE": rmse, "MAPE": mape}
-
-# helper: since our data is often transformed, transform it back to calculate MAPE
-def invert_transform(col, forecasted_diff, last_known_value, is_log=False):
-    if is_log:
-        last_log = np.log(last_known_value)
-        return np.exp(last_log + forecasted_diff.cumsum())
-    else:
-        return last_known_value + forecasted_diff.cumsum()
+# def fit_and_forecast(train_series, horizon):
+#   train_series = train_series.dropna()
+#   model = SARIMAX(train_series,
+#                                     order=(1, 0, 0),
+#                                     seasonal_order=(0, 0, 0, 0),
+#                   enforce_stationarity=False,
+#                   enforce_invertibility=False)
+#   result = model.fit(maxiter = 250,
+#                      disp=False)
+#   forecast = result.get_forecast(steps=horizon)
+#   return forecast.predicted_mean
 
 
-#------------------------------------------------------------------
+# def compute_metrics(actual, predicted):
+#   errors = actual.values - predicted.values
+#   mae  = np.mean(np.abs(errors))
+#   rmse = np.sqrt(np.mean(errors ** 2))
+#   # mask zeros to avoid division issues in MAPE
+#   mask = actual.values != 0
+#   mape = np.mean(np.abs(errors[mask] / actual.values[mask])) * 100
+#   return {"MAE": mae, "RMSE": rmse, "MAPE": mape}
+
+# # helper: since our data is often transformed, transform it back to calculate MAPE
+# def invert_transform(col, forecasted_diff, last_known_value, is_log=False):
+#     if is_log:
+#         last_log = np.log(last_known_value)
+#         return np.exp(last_log + forecasted_diff.cumsum())
+#     else:
+#         return last_known_value + forecasted_diff.cumsum()
+
+
+# #------------------------------------------------------------------
 
 
 
-all_cv_results = {}
-all_cv_forecasts = {}
+# all_cv_results = {}
+# all_cv_forecasts = {}
 
-forecast_horizons = {
-    freq_name: list(range(1, n_steps + 1))
-    for freq_name, n_steps in forecast_config.items()
-}
+# forecast_horizons = {
+#     freq_name: list(range(1, n_steps + 1))
+#     for freq_name, n_steps in forecast_config.items()
+# }
 
-for freq_name, df_transformed in stationary_dfs.items():
-    df_orig = dataframes[freq_name]
-    n_steps = forecast_config[freq_name]
-    horizons = forecast_horizons[freq_name]
+# for freq_name, df_transformed in stationary_dfs.items():
+#     df_orig = dataframes[freq_name]
+#     n_steps = forecast_config[freq_name]
+#     horizons = forecast_horizons[freq_name]
     
-    df_transformed.index.freq = freq_map[freq_name]
+#     df_transformed.index.freq = freq_map[freq_name]
 
-    folds_trans = get_folds(df_transformed, n_folds=5, max_horizon=n_steps)
-    folds_orig  = get_folds(df_orig,         n_folds=5, max_horizon=n_steps)
+#     folds_trans = get_folds(df_transformed, n_folds=5, max_horizon=n_steps)
+#     folds_orig  = get_folds(df_orig,         n_folds=5, max_horizon=n_steps)
 
-    freq_metrics   = []
-    # per-column, per-horizon store: {col: {h: [{'forecast': ..., 'actual': ...}, ...]}}
-    freq_forecasts = {col: {h: [] for h in horizons} for col in df_transformed.columns}
+#     freq_metrics   = []
+#     # per-column, per-horizon store: {col: {h: [{'forecast': ..., 'actual': ...}, ...]}}
+#     freq_forecasts = {col: {h: [] for h in horizons} for col in df_transformed.columns}
 
-    for col in df_transformed.columns:
-        is_log         = col in log_cols
-        is_second_diff = col in second_diff
+#     for col in df_transformed.columns:
+#         is_log         = col in log_cols
+#         is_second_diff = col in second_diff
 
-        # per-horizon metric accumulators
-        col_results = {h: [] for h in horizons}  # list of metric dicts per fold
+#         # per-horizon metric accumulators
+#         col_results = {h: [] for h in horizons}  # list of metric dicts per fold
 
-        for i in range(len(folds_trans)):
-            df_train_t, df_test_t = folds_trans[i]
-            df_train_o, df_test_o = folds_orig[i]
+#         for i in range(len(folds_trans)):
+#             df_train_t, df_test_t = folds_trans[i]
+#             df_train_o, df_test_o = folds_orig[i]
 
-            train_t = df_train_t[col].asfreq(freq_map[freq_name])
-            train_o = df_train_o[col]
-            test_o  = df_test_o[col]
+#             train_t = df_train_t[col].asfreq(freq_map[freq_name])
+#             train_o = df_train_o[col]
+#             test_o  = df_test_o[col]
 
-            # forecast at max horizon; slice per h below
-            pred_diffs = fit_and_forecast(train_t, n_steps)
+#             # forecast at max horizon; slice per h below
+#             pred_diffs = fit_and_forecast(train_t, n_steps)
 
-            last_val = train_o.dropna().iloc[-1]
+#             last_val = train_o.dropna().iloc[-1]
 
-            if is_second_diff:
-                last_diff        = train_o.diff().dropna().iloc[-1]
-                reconstructed    = last_diff + pred_diffs.cumsum()
-                pred_inverted    = last_val + reconstructed.cumsum()
-            else:
-                pred_inverted = invert_transform(col, pred_diffs, last_val, is_log=is_log)
+#             if is_second_diff:
+#                 last_diff        = train_o.diff().dropna().iloc[-1]
+#                 reconstructed    = last_diff + pred_diffs.cumsum()
+#                 pred_inverted    = last_val + reconstructed.cumsum()
+#             else:
+#                 pred_inverted = invert_transform(col, pred_diffs, last_val, is_log=is_log)
                 
-            pred_inverted.index = test_o.index[:len(pred_inverted)]
+#             pred_inverted.index = test_o.index[:len(pred_inverted)]
 
-            # iterate over horizons, slicing the full forecast
-            for h in horizons:
-                actual_h   = test_o.iloc[:h]
-                forecast_h = pred_inverted.iloc[:h]
+#             # iterate over horizons, slicing the full forecast
+#             for h in horizons:
+#                 actual_h   = test_o.iloc[:h]
+#                 forecast_h = pred_inverted.iloc[:h]
 
-                # NaN mask (mirrors old version)
-                mask           = actual_h.notna()
-                actual_clean   = actual_h[mask]
-                forecast_clean = forecast_h[mask]
+#                 # NaN mask (mirrors old version)
+#                 mask           = actual_h.notna()
+#                 actual_clean   = actual_h[mask]
+#                 forecast_clean = forecast_h[mask]
 
-                if len(actual_clean) == 0:
-                    continue
+#                 if len(actual_clean) == 0:
+#                     continue
 
-                # align index (mirrors old version)
-                forecast_clean.index = actual_clean.index
+#                 # align index (mirrors old version)
+#                 forecast_clean.index = actual_clean.index
 
-                metrics = compute_metrics(actual_clean, forecast_clean)
-                col_results[h].append(metrics)               # raw per-fold, per-horizon
+#                 metrics = compute_metrics(actual_clean, forecast_clean)
+#                 col_results[h].append(metrics)               # raw per-fold, per-horizon
 
-                freq_forecasts[col][h].append({              # store for plotting
-                    'forecast': forecast_clean,
-                    'actual':   actual_clean,
-                })
+#                 freq_forecasts[col][h].append({              # store for plotting
+#                     'forecast': forecast_clean,
+#                     'actual':   actual_clean,
+#                 })
 
-        # average across folds per horizon
-        for h in horizons:
-            if not col_results[h]:
-                continue
-            freq_metrics.append({
-                'Variable': col,
-                'Horizon':  h,
-                'CV_MAE':   np.mean([m['MAE']  for m in col_results[h]]),
-                'CV_RMSE':  np.mean([m['RMSE'] for m in col_results[h]]),
-                'CV_MAPE':  np.mean([m['MAPE'] for m in col_results[h]]),
-            })
+#         # average across folds per horizon
+#         for h in horizons:
+#             if not col_results[h]:
+#                 continue
+#             freq_metrics.append({
+#                 'Variable': col,
+#                 'Horizon':  h,
+#                 'CV_MAE':   np.mean([m['MAE']  for m in col_results[h]]),
+#                 'CV_RMSE':  np.mean([m['RMSE'] for m in col_results[h]]),
+#                 'CV_MAPE':  np.mean([m['MAPE'] for m in col_results[h]]),
+#             })
 
-    all_cv_results[freq_name]   = pd.DataFrame(freq_metrics)
-    all_cv_forecasts[freq_name] = freq_forecasts
+#     all_cv_results[freq_name]   = pd.DataFrame(freq_metrics)
+#     all_cv_forecasts[freq_name] = freq_forecasts
     
     
     
     
-mean_levels = {
-    freq_name: dataframes[freq_name].mean()
-    for freq_name in dataframes
-}
+# mean_levels = {
+#     freq_name: dataframes[freq_name].mean()
+#     for freq_name in dataframes
+# }
 
-for freq_name, results_df in all_cv_results.items():
-    levels = mean_levels[freq_name]
+# for freq_name, results_df in all_cv_results.items():
+#     levels = mean_levels[freq_name]
     
-    results_df["NRMSE"] = results_df.apply(
-        lambda row: row["CV_RMSE"] / levels[row["Variable"]], axis=1
-    )
+#     results_df["NRMSE"] = results_df.apply(
+#         lambda row: row["CV_RMSE"] / levels[row["Variable"]], axis=1
+#     )
     
-    print(f"\n=== {freq_name} ===")
-    print(
-        results_df
-        .pivot(index="Variable", columns="Horizon", values=["CV_MAE", "CV_RMSE", "CV_MAPE", "NRMSE"])
-    )
+#     print(f"\n=== {freq_name} ===")
+#     print(
+#         results_df
+#         .pivot(index="Variable", columns="Horizon", values=["CV_MAE", "CV_RMSE", "CV_MAPE", "NRMSE"])
+#     )
     
     
-plot_horizon = {
-    'Monthly':    12,
-    'Weekly':      8,
-    'Daily_5day': 20,
-    'Daily_7day': 30,
-    'Quarterly':   4,
-}
+# plot_horizon = {
+#     'Monthly':    12,
+#     'Weekly':      8,
+#     'Daily_5day': 20,
+#     'Daily_7day': 30,
+#     'Quarterly':   4,
+# }
 
-x = {
-    'Monthly':    72,   # 6 years
-    'Weekly':     104,  # 2 years
-    'Daily_5day': 260,  # ~1 year business days
-    'Daily_7day': 365,  # 1 year
-    'Quarterly':  20,   # 5 years
-}
+# x = {
+#     'Monthly':    72,   # 6 years
+#     'Weekly':     104,  # 2 years
+#     'Daily_5day': 260,  # ~1 year business days
+#     'Daily_7day': 365,  # 1 year
+#     'Quarterly':  20,   # 5 years
+# }
 
 key_horizons = {
     'Monthly':    [1, 6, 12],
@@ -550,58 +540,58 @@ key_horizons = {
     'Quarterly':  [1, 2, 4],
 }
 
-for freq_name, df_transformed in stationary_dfs.items():
-    df_orig     = dataframes[freq_name]
-    results_df  = all_cv_results[freq_name]
-    forecasts   = all_cv_forecasts[freq_name]
-    h_plot      = plot_horizon[freq_name]
-    tail_n      = x[freq_name]
+# for freq_name, df_transformed in stationary_dfs.items():
+#     df_orig     = dataframes[freq_name]
+#     results_df  = all_cv_results[freq_name]
+#     forecasts   = all_cv_forecasts[freq_name]
+#     h_plot      = plot_horizon[freq_name]
+#     tail_n      = x[freq_name]
 
-    cols   = df_orig.columns
-    n_cols = 2
-    n_rows = int(np.ceil(len(cols) / n_cols))
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, n_rows * 4))
-    axes = axes.flatten()
-    n_folds = n_folds = (max(
-        len(entries)
-        for col_dict in forecasts.values()
-        for entries in col_dict.values()
-        if entries))  # skip empty lists  # infer from data
+#     cols   = df_orig.columns
+#     n_cols = 2
+#     n_rows = int(np.ceil(len(cols) / n_cols))
+#     fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, n_rows * 4))
+#     axes = axes.flatten()
+#     n_folds = n_folds = (max(
+#         len(entries)
+#         for col_dict in forecasts.values()
+#         for entries in col_dict.values()
+#         if entries))  # skip empty lists  # infer from data
     
-    colors  = plt.cm.RdYlGn(np.linspace(0.2, 0.8, n_folds))
+#     colors  = plt.cm.RdYlGn(np.linspace(0.2, 0.8, n_folds))
 
-    for i, col in enumerate(cols):
-        ax = axes[i]
-        actual_subset = df_orig[col].tail(tail_n)
-        ax.plot(actual_subset.index, actual_subset.values,
-                color='black', linewidth=1, label='Actual', alpha=0.6, zorder=2)
+#     for i, col in enumerate(cols):
+#         ax = axes[i]
+#         actual_subset = df_orig[col].tail(tail_n)
+#         ax.plot(actual_subset.index, actual_subset.values,
+#                 color='black', linewidth=1, label='Actual', alpha=0.6, zorder=2)
 
-        for fold_i, entry in enumerate(forecasts[col][h_plot]):
-            color = colors[fold_i % len(colors)]
-            ax.plot(entry['forecast'], color=color, linewidth=1.5,
-                    linestyle='--', alpha=0.9, label=f'Fold {fold_i+1}')
-            ax.plot(entry['actual'],   color=color, linewidth=1.5,
-                    alpha=0.5)
+#         for fold_i, entry in enumerate(forecasts[col][h_plot]):
+#             color = colors[fold_i % len(colors)]
+#             ax.plot(entry['forecast'], color=color, linewidth=1.5,
+#                     linestyle='--', alpha=0.9, label=f'Fold {fold_i+1}')
+#             ax.plot(entry['actual'],   color=color, linewidth=1.5,
+#                     alpha=0.5)
 
-        ax.set_xlim(actual_subset.index.min(), actual_subset.index.max())
+#         ax.set_xlim(actual_subset.index.min(), actual_subset.index.max())
 
-        # NRMSE in title - note updated column names
-        nrmse_row = results_df[results_df['Variable'] == col]
-        nrmse_1   = nrmse_row[nrmse_row['Horizon'] == 1][      'NRMSE'].values
-        nrmse_h   = nrmse_row[nrmse_row['Horizon'] == h_plot]['NRMSE'].values
-        title = f"{col}  |  NRMSE h=1: {nrmse_1[0]:.3f}  h={h_plot}: {nrmse_h[0]:.3f}" \
-                if len(nrmse_1) and len(nrmse_h) else col
+#         # NRMSE in title - note updated column names
+#         nrmse_row = results_df[results_df['Variable'] == col]
+#         nrmse_1   = nrmse_row[nrmse_row['Horizon'] == 1][      'NRMSE'].values
+#         nrmse_h   = nrmse_row[nrmse_row['Horizon'] == h_plot]['NRMSE'].values
+#         title = f"{col}  |  NRMSE h=1: {nrmse_1[0]:.3f}  h={h_plot}: {nrmse_h[0]:.3f}" \
+#                 if len(nrmse_1) and len(nrmse_h) else col
 
-        ax.set_title(title, fontsize=9)
-        ax.legend(fontsize=7, ncol=3)
-        ax.grid(alpha=0.3)
+#         ax.set_title(title, fontsize=9)
+#         ax.legend(fontsize=7, ncol=3)
+#         ax.grid(alpha=0.3)
 
-    for j in range(i + 1, len(axes)):
-        axes[j].set_visible(False)
+#     for j in range(i + 1, len(axes)):
+#         axes[j].set_visible(False)
 
-    fig.suptitle(f"CV Forecasts - {freq_name}", fontsize=12, y=1.01)
-    plt.tight_layout()
-    plt.close()
+#     fig.suptitle(f"CV Forecasts - {freq_name}", fontsize=12, y=1.01)
+#     plt.tight_layout()
+#     plt.close()
 
 
 #------------------------------------------------------------------
@@ -647,14 +637,20 @@ def get_folds(df, n_folds, max_horizon):
     return folds
 
 
-def fit_and_forecast(train_series, horizon, freq_name, col):
-    train_series   = train_series.dropna()
+def fit_and_forecast(train_series, horizon):
+    train_series = train_series.dropna()
+    # dropna strips freq from irregular series (e.g. holiday gaps in Daily_5day);
+    # re-infer it so statsmodels can produce a proper date-indexed forecast
+    if train_series.index.freq is None:
+        inferred = pd.infer_freq(train_series.index)
+        if inferred:
+            train_series = train_series.asfreq(inferred)
     model = SARIMAX(train_series,
                     order=(1, 0, 0),
                     seasonal_order=(0, 0, 0, 0),
                     enforce_stationarity=False,
                     enforce_invertibility=False)
-    result   = model.fit(maxiter=250, disp=False)
+    result   = model.fit(maxiter=1000, disp=False)
     forecast = result.get_forecast(steps=horizon)
     return forecast.predicted_mean
 
@@ -702,7 +698,7 @@ for freq_name in dataframes:
         for col in df_t.columns:
             for h in horizons:
                 train_col = train[col].asfreq(freq_map[freq_name])
-                forecast  = fit_and_forecast(train_col, h, freq_name, col)
+                forecast  = fit_and_forecast(train_col, h)
 
                 # invert transform
                 is_log         = col in log_cols
