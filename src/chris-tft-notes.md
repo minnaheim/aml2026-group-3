@@ -54,11 +54,9 @@
 
 
 #### minna's todos:
-- merge anna's branch back to mine
-- try her implementation with renku. (as soon as she's done)
+
 - check that horizon of prediction is same for all AR, ARIMA and TFT !!!
 - kafka embeddings 
-- add wandb secrets
 - start presentation-preparation.md 
 - merge to main
 

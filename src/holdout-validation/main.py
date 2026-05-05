@@ -16,14 +16,33 @@ matplotlib.use("Agg")  # headless-safe; no display required
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import wandb
+import os
 
 sys.path.insert(0, str(Path(__file__).parent))
 from data_frame_builder import DataFrameBuilder
-from benchmark_runner    import ARRunner
+from benchmark_runner    import ARRunner, ARIMARunner
 from tft_runner          import TFTRunner
 
 MAIN_TARGETS = ["CPI", "UNRATE", "GDP"]
 ALL_TARGETS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
+
+# --- weights and biases logging ------------------------
+
+_RENKU_WANDB_SECRET = Path("/secrets/wandb-api-key.txt")
+
+def _setup_wandb() -> None:
+    """Log in to W&B.
+     with the session secret, in renku, else you input it yourself
+    """
+    if not os.environ.get("WANDB_API_KEY"):
+        if _RENKU_WANDB_SECRET.exists():
+            os.environ["WANDB_API_KEY"] = _RENKU_WANDB_SECRET.read_text().strip()
+            print(f"W&B: loaded API key from {_RENKU_WANDB_SECRET}")
+        else:
+            key = input("Enter your W&B API key (or set WANDB_API_KEY / mount secret): ").strip()
+            os.environ["WANDB_API_KEY"] = key
+    wandb.login()
 
 
 # ── metrics ──────────────────────────────────────────────────────────────────
@@ -61,8 +80,8 @@ def plot_results(results: dict, out_dir: Path):
     targets = sorted({t for res in results.values() for t in res})
     _, axes = plt.subplots(len(targets), 1, figsize=(14, 4 * len(targets)), squeeze=False)
 
-    colors     = {"AR": "crimson",  "TFT": "steelblue"}
-    linestyles = {"AR": "--",        "TFT": ":"}
+    colors     = {"AR": "crimson", "ARIMA": "darkorange", "TFT": "steelblue"}
+    linestyles = {"AR": "--",      "ARIMA": "-.",          "TFT": ":"}
 
     for i, target in enumerate(targets):
         ax = axes[i][0]
@@ -120,6 +139,9 @@ def main():
     root    = Path(__file__).parent.parent.parent
     out_dir = root / "out" / "holdout"
 
+    if args.wandb:
+        _setup_wandb()
+
     print(f"Targets : {args.targets}")
     print(f"Device  : {args.device}")
     print(f"W&B     : {args.wandb}")
@@ -143,9 +165,10 @@ def main():
     )
     # initiate both runners
     ar_runner  = ARRunner(dfb)
+    arima_runner  = ARIMARunner(dfb)
     tft_runner = TFTRunner(dfb)
 
-    results: dict[str, dict[str, pd.DataFrame]] = {"AR": {}, "TFT": {}}
+    results: dict[str, dict[str, pd.DataFrame]] = {"AR": {}, "ARIMA": {}, "TFT": {}}
 
     # ── 2. let benchmark and tft run ─────────────────────────────────────────
     for target in args.targets:
@@ -158,6 +181,13 @@ def main():
         ar_df = ar_runner.run(splits, target=target, fold=0)
         results["AR"][target] = ar_df
         print(f"  → {len(ar_df)} predictions")
+
+
+        # add arima order for each variable
+        print("\n[ARIMA]")
+        arima_df, arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=0)
+        results["ARIMA"][target] = arima_df
+        print(f"  → {len(arima_df)} predictions  (order={arima_order}, seasonal={arima_seasonal})")
 
         print("\n[TFT – training]")
         ckpt = tft_runner.run(

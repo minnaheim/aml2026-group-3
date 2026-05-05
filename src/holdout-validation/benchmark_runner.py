@@ -199,12 +199,13 @@ class ARIMARunner:
         forecast_raw = res.get_forecast(steps=len(test)).predicted_mean.values
         forecast     = self._invert(forecast_raw, series.iloc[-1], transform)
 
-        return pd.DataFrame({
+        df = pd.DataFrame({
             "date":      test["date"].values,
             "actual":    test[target].values,
             "predicted": forecast,
             "target":    target,
         })
+        return df, order, seasonal_order
 
 # ---------------------------------------------------------------------------
 # try it out here! 
@@ -214,7 +215,7 @@ class ARIMARunner:
 # from data_frame_builder import DataFrameBuilder 
 
 # path = "/Users/minna/Code/FS26/AML/aml2026-group-3"
-# path = r"C:\Users\annaz\OneDrive\Dokumente\Studium\UZH_Master\2026FS\Advanced Machine Learning\Practical_Assignment\aml2026-group-3"
+# # path = r"C:\Users\annaz\OneDrive\Dokumente\Studium\UZH_Master\2026FS\Advanced Machine Learning\Practical_Assignment\aml2026-group-3"
 # dfb = DataFrameBuilder(path)
 # df = dfb.process_data()
 
@@ -226,9 +227,10 @@ class ARIMARunner:
 #           f"test [{te['date'].min().date()} – {te['date'].max().date()}] ({len(te)} rows)")
 
 # arr = ARRunner(dfb)
-# result = arr.run(splits, target="CPI", fold = 0)
+# result = arr.run(splits, target="UNRATE", fold = 0)
 # arimar = ARIMARunner(dfb)
-# result = arimar.run(splits, target="CPI", fold = 0)
+# # TODO: GDP not stationary, even if log and diff
+# result = arimar.run(splits, target="UNRATE", fold = 0)
 # print(result)
 
 # # # plot the result 
