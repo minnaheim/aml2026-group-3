@@ -26,9 +26,9 @@ class ARRunner:
             # test if we really need both
             log = np.log(series)
             log_diff = log.diff().dropna()
-            print(f"just log adf test: {adfuller(log)[1]}")
+            # print(f"just log adf test: {adfuller(log)[1]}")
             # claude says the reason its stationary here but not when differentiating is due to misspecification of adfuller, regression='c' should be 'ct' tho.
-            print(f"log & diff adf test: {adfuller(log_diff)[1]}")
+            # print(f"log & diff adf test: {adfuller(log_diff)[1]}")
             # here, we have structural breaks in CPI, since such long time frame.
             return np.log(series).diff().dropna(), "log_diff"
         return series.copy(), "levels"  # UNRATE: already stationary in levels
