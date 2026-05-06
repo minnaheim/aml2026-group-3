@@ -55,9 +55,7 @@
 
 #### minna's todos:
 
-- check that horizon of prediction is same for all AR, ARIMA and TFT !!!
 - kafka embeddings 
-- start presentation-preparation.md 
 - merge to main
 
 #### anna's todo:
@@ -80,3 +78,8 @@
 - we want to do embedinngs alternative tests
 - more folds
 - different alignment strategies
+- different forecast horizon possibilities, which to choose? what is most scientific?
+  - option 1
+  - option 2
+  - option 3
+- ARIMA benchmark too good, can we handicap it a bit? 

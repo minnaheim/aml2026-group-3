@@ -81,25 +81,29 @@ class ARRunner:
         freq     = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
         test_len = len(test)
         windows: list[pd.DataFrame] = []
+        pred_context = train.copy()  # grows with own predictions, never actual test obs
 
         for start in range(0, test_len, step):
             end         = min(start + step, test_len)
             window_size = end - start
             test_window = test.iloc[start:end]
 
-            # context = train + observed test up to (but not including) this window
-            # context_end = start so we don't leak the prediction window into the apply
-            # create new train df, based on how far along
-            context_raw    = pd.concat([train, test.iloc[:start]], ignore_index=True)
+            # context = train + own predictions so far (no actual test obs — no pollution)
+            # drop duplicate dates at the train/test boundary (can happen when split doesn't fall on a quarter boundary)
+            context_raw    = pred_context.drop_duplicates(subset="date", keep="last")
             context_series = context_raw.set_index("date")[target]
             stationary_ctx, _ = self._transform(context_series, target)
 
-            # expanding context mirrors TFT: same fixed params (from run()), but encoder sees more observed data
+            # expanding context mirrors TFT: same fixed params (from run()), but encoder sees more predicted data
             # .apply() keeps the fitted params from run(), no refit
             ctx_result   = self._fit.apply(stationary_ctx.asfreq(freq))
             forecast_raw = ctx_result.get_forecast(steps=window_size).predicted_mean.values
             # transform back to non-log; anchor on last raw value of context (not just train)
             forecast     = self._invert(forecast_raw, context_series.iloc[-1], self._transform_type)
+
+            # append own predictions (not actuals) to context for next window
+            pred_rows    = pd.DataFrame({"date": test_window["date"].values, target: forecast})
+            pred_context = pd.concat([pred_context, pred_rows], ignore_index=True)
 
             windows.append(pd.DataFrame({
                 "date":      test_window["date"].values,
@@ -237,25 +241,29 @@ class ARIMARunner:
         freq     = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
         test_len = len(test)
         windows: list[pd.DataFrame] = []
+        pred_context = train.copy()  # grows with own predictions, never actual test obs
 
         for start in range(0, test_len, step):
             end         = min(start + step, test_len)
             window_size = end - start
             test_window = test.iloc[start:end]
 
-            # context = train + observed test up to (but not including) this window
-            # context_end = start so we don't leak the prediction window into the apply
-            # create new train df, based on how far along
-            context_raw    = pd.concat([train, test.iloc[:start]], ignore_index=True)
+            # context = train + own predictions so far (no actual test obs — no pollution)
+            # drop duplicate dates at the train/test boundary (can happen when split doesn't fall on a quarter boundary)
+            context_raw    = pred_context.drop_duplicates(subset="date", keep="last")
             context_series = context_raw.set_index("date")[target]
             stationary_ctx, _ = self._transform(context_series, target)
 
-            # expanding context mirrors TFT: same fixed params (from run()), but model sees more observed data
+            # expanding context mirrors TFT: same fixed params (from run()), but model sees more predicted data
             # .apply() keeps the fitted params from run(), no refit
             ctx_result   = self._fit.apply(stationary_ctx.asfreq(freq))
             forecast_raw = ctx_result.get_forecast(steps=window_size).predicted_mean.values
             # transform back to non-log; anchor on last raw value of context (not just train)
             forecast     = self._invert(forecast_raw, context_series.iloc[-1], self._transform_type)
+
+            # append own predictions (not actuals) to context for next window
+            pred_rows    = pd.DataFrame({"date": test_window["date"].values, target: forecast})
+            pred_context = pd.concat([pred_context, pred_rows], ignore_index=True)
 
             windows.append(pd.DataFrame({
                 "date":      test_window["date"].values,

@@ -237,6 +237,7 @@ class TFTRunner:
         test_len = len(test_raw)
         step     = self.MAX_PREDICTION_LENGTH
         all_rows: list[dict] = []
+        accumulated_preds: dict = {}  # date -> prediction in original scale (no pollution)
 
         for start in range(0, test_len, step):
             end         = min(start + step, test_len)
@@ -248,6 +249,11 @@ class TFTRunner:
             # a full MAX_PREDICTION_LENGTH decoder window to index into.
             context_end = min(start + step, test_len)
             context_raw = pd.concat([train_raw, test_raw.iloc[:context_end]], ignore_index=True)
+            # replace target values in test portion with own predictions (no actual test obs — no pollution)
+            if accumulated_preds:
+                # mask the values which have been predicted (= accumulated)
+                mask = context_raw["date"].isin(accumulated_preds)
+                context_raw.loc[mask, target] = context_raw.loc[mask, "date"].map(accumulated_preds)
             context_df  = self._add_tft_vars(context_raw, target)
 
             pred_ds = TimeSeriesDataSet.from_dataset(
@@ -270,6 +276,8 @@ class TFTRunner:
                 # reverse the logging from before
                 if target in LOG_TARGETS:
                     pred = np.exp(pred)
+                # accumulate predictions in original scale for next window's context (no pollution)
+                accumulated_preds[row["date"]] = pred
                 all_rows.append({
                     "date":      row["date"],
                     "actual":    float(row[target]),  # test_raw is original scale
