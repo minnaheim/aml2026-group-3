@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import lightning.pytorch as pl
 
+
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import EncoderNormalizer # switched from group normalizer
 from pytorch_forecasting.metrics import SMAPE
@@ -198,15 +199,13 @@ class TFTRunner:
     def run(self, splits, target: str, fold: int = 0, batch_size: int = 128,
             use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu') -> str:
         """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
-        train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
+        self._train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
         print("Got data from data_frame_builder...")
-        train_df  = self._add_tft_vars(train_raw, target)
-        # print(train_df.columns)
-        # print(train_df.tail(30))
+        train_df = self._add_tft_vars(self._train_raw, target)
 
-        training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
+        self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
         print("Created TimeSeriesDataSet for tft...")
-        return self.train_tft(training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
+        return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
                 batch_size: int = 128, device: str = 'cpu') -> pd.DataFrame:
@@ -216,18 +215,24 @@ class TFTRunner:
         predictions are made in non-overlapping windows of MAX_PREDICTION_LENGTH days.
         Returns a monthly (or quarterly for GDP) DataFrame with date/actual/predicted/target.
         """
-        from pytorch_forecasting import TemporalFusionTransformer as TFT
+        
 
+        # fetch model params & evaluate
         map_location = device if device in ("cuda", "mps") else "cpu"
-        model = TFT.load_from_checkpoint(checkpoint_path, map_location=map_location)
+        # this is written in train_tft
+        model = TemporalFusionTransformer.load_from_checkpoint(checkpoint_path, map_location=map_location)
         model.eval()
 
-        train_raw = self.dfb.get_data(splits, train=True,  model='TFT', fold=fold)
-        test_raw  = self.dfb.get_data(splits, train=False, model='TFT', fold=fold)
+        # check if we have the training_ds & train_raw available (from run method) if not, re-create
+        train_raw   = getattr(self, '_train_raw',   self.dfb.get_data(splits, train=True,  model='TFT', fold=fold))
+        training_ds = getattr(self, '_training_ds', None)
+        # TODO: why would it be? run() before predict()...
+        # if training_ds is None:
+        #     train_df    = self._add_tft_vars(train_raw, target)
+        #     training_ds, _, _ = self.create_tft_dataset(train_df, target, fold, batch_size)
 
-        # build reference training dataset (data manipulation only — no retraining)
-        train_df    = self._add_tft_vars(train_raw, target)
-        training_ds, _, _ = self.create_tft_dataset(train_df, target, fold, batch_size)
+        # get validation data (not test. misnomer), test not used in cv
+        test_raw = self.dfb.get_data(splits, train=False, model='TFT', fold=fold)
 
         test_len = len(test_raw)
         step     = self.MAX_PREDICTION_LENGTH

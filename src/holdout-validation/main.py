@@ -118,6 +118,7 @@ def plot_results(results: dict, out_dir: Path):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    # parse arguments passed by user
     parser = argparse.ArgumentParser(
         description="Holdout validation pipeline: AR(1) benchmark vs TFT"
     )
@@ -177,15 +178,16 @@ def main():
         print(f"{'─' * 55}")
 
         print("\n[AR(1)]")
-        # TODO: maybe keep same structure for AR, TFT -> tft has predict method...
-        ar_df = ar_runner.run(splits, target=target, fold=0)
+        ar_runner.run(splits, target=target, fold=0)
+        ar_df = ar_runner.predict(splits, target=target, fold=0)
         results["AR"][target] = ar_df
         print(f"  → {len(ar_df)} predictions")
 
 
         # add arima order for each variable
         print("\n[ARIMA]")
-        arima_df, arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=0)
+        arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=0)
+        arima_df = arima_runner.predict(arima_order, arima_seasonal, splits, target=target, fold=0)
         results["ARIMA"][target] = arima_df
         print(f"  → {len(arima_df)} predictions  (order={arima_order}, seasonal={arima_seasonal})")
 
