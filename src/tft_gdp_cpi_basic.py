@@ -18,7 +18,7 @@ Split:    train  : date < CUTOFF_DATE
           test   : date >= CUTOFF_DATE
 
 Usage:
-    python tft_gdp_speeches.py [--target {GDP,CPI}] [--no-speeches]
+    python tft_gdp_cpi_basic.py [--target {GDP,CPI}] [--no-speeches]
 
 Arguments:
     --target {GDP,CPI}   Variable to predict. Default: GDP.
@@ -27,16 +27,16 @@ Arguments:
 
 Examples:
     # Predict GDP with speech embeddings (default)
-    python tft_gdp_speeches.py
+    python tft_gdp_cpi_basic.py
 
     # Predict GDP without speech embeddings
-    python tft_gdp_speeches.py --no-speeches
+    python tft_gdp_cpi_basic.py --no-speeches
 
     # Predict CPI with speech embeddings
-    python tft_gdp_speeches.py --target CPI
+    python tft_gdp_cpi_basic.py --target CPI
 
     # Predict CPI without speech embeddings
-    python tft_gdp_speeches.py --target CPI --no-speeches
+    python tft_gdp_cpi_basic.py --target CPI --no-speeches
 """
 
 import argparse
@@ -54,9 +54,21 @@ _parser.add_argument(
     "--no-speeches", dest="no_speeches", action="store_true",
     help="Exclude FOMC speech PCA embeddings; train on macro variables only.",
 )
+_parser.add_argument(
+    "--shuffled-speeches", dest="shuffled_speeches", action="store_true",
+    help="Use shuffled (randomised) speech embeddings instead of real ones.",
+)
+_parser.add_argument(
+    "--embedding-file", dest="embedding_file", default=None,
+    help="Path to a speech embeddings CSV (relative to repo root or absolute). "
+         "Overrides the default fomc-roberta file. e.g. "
+         "data/embeddings/fomc-roberta/embeddings_pca_cls_full_fomc-roberta.csv",
+)
 _args = _parser.parse_args()
 TARGET       = _args.target
 USE_SPEECHES = not _args.no_speeches
+USE_SHUFFLED = _args.shuffled_speeches
+EMBEDDING_FILE = _args.embedding_file  # None → use defaults
 
 # Ensure stdout handles unicode on Windows terminals
 if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
@@ -91,6 +103,9 @@ MAX_EPOCHS  = 60
 PATIENCE    = 8
 LR          = 0.005
 
+SEED = 42
+pl.seed_everything(SEED, workers=True)
+
 SPEECH_WINDOW_QUARTERS = 4        # rolling window for PCA aggregation (1 year)
 START_DATE = pd.Timestamp("1990-01-01")    # earliest quarter to use
 
@@ -117,9 +132,22 @@ daily = (pd.read_csv(f"{REPO_PATH}/data/macro-vars-daily.csv",
            [["GBP", "YEN", "FFR"]]                        # longest coverage
            .sort_index())
 
-speeches = pd.read_csv(
-    f"{REPO_PATH}/data/embeddings/fomc-roberta/embeddings_pca_mean_full_fomc-roberta.csv",
-    parse_dates=["Date"]).sort_values("Date").reset_index(drop=True)
+if EMBEDDING_FILE is not None:
+    _speech_path = (EMBEDDING_FILE if os.path.isabs(EMBEDDING_FILE)
+                    else os.path.join(REPO_PATH, EMBEDDING_FILE))
+elif USE_SHUFFLED:
+    _speech_path = f"{REPO_PATH}/data/embeddings/fomc-roberta/shuffled/embeddings_pca_cls_full_fomc-roberta_shuffled.csv"
+else:
+    _speech_path = f"{REPO_PATH}/data/embeddings/fomc-roberta/embeddings_pca_mean_full_fomc-roberta.csv"
+
+# Derive a human-readable label from the filename (e.g. "cls_full", "mean_512")
+_emb_stem = os.path.splitext(os.path.basename(_speech_path))[0]  # strip .csv
+EMBEDDING_VARIANT = _emb_stem  # full stem as fallback
+for _marker in ("embeddings_pca_", "fomc-roberta", "finbert", "llama"):
+    _emb_stem = _emb_stem.replace(_marker, "")
+EMBEDDING_VARIANT = _emb_stem.strip("_-") or EMBEDDING_VARIANT
+
+speeches = pd.read_csv(_speech_path, parse_dates=["Date"]).sort_values("Date").reset_index(drop=True)
 
 PCA_COLS  = sorted([c for c in speeches.columns if c.startswith("pca_")])
 MACRO_COLS = list(monthly.columns) + list(daily.columns)
@@ -173,7 +201,8 @@ COVARIATE_COLS = [c for c in MACRO_COLS + (PCA_COLS if USE_SPEECHES else []) if 
 print(f"\nQuarterly dataset: {len(df)} rows  "
       f"({df['date'].min().date()} -> {df['date'].max().date()})")
 print(f"Target:            {TARGET}")
-print(f"Speech embeddings: {'ON' if USE_SPEECHES else 'OFF'}")
+speech_status = ("OFF" if not USE_SPEECHES else "ON (shuffled)" if USE_SHUFFLED else "ON")
+print(f"Speech embeddings: {speech_status}")
 print(f"Covariates ({len(COVARIATE_COLS)}): {COVARIATE_COLS}")
 
 
@@ -240,6 +269,7 @@ trainer = pl.Trainer(
     accelerator      = "auto",
     devices          = 1,
     gradient_clip_val= 0.1,
+    deterministic    = "warn",
     callbacks        = [
         EarlyStopping(monitor="val_loss", min_delta=1e-4,
                       patience=PATIENCE, mode="min"),
@@ -331,21 +361,36 @@ print(f"  MAE   = {mae:,.4g}")
 print(f"  SMAPE = {smape_val:.2f}%")
 
 # ── Output directory ─────────────────────────────────────────────────────────────
-suffix   = "with_speeches" if USE_SPEECHES else "macro_only"
+if not USE_SPEECHES:
+    suffix = "macro_only"
+elif USE_SHUFFLED:
+    suffix = f"shuffled_{EMBEDDING_VARIANT}"
+else:
+    suffix = f"speeches_{EMBEDDING_VARIANT}"
 OUT_DIR  = os.path.join(REPO_PATH, "out", "tft")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# ── 8b. Save metrics to .txt ────────────────────────────────────────────────────
-metrics_path = os.path.join(OUT_DIR, f"metrics_{TARGET.lower()}_{suffix}.txt")
-with open(metrics_path, "w") as f:
+# ── 8b. Append metrics to shared .txt ───────────────────────────────────────────
+if not USE_SPEECHES:
+    embedding_label = "OFF"
+elif USE_SHUFFLED:
+    embedding_label = f"ON – shuffled ({EMBEDDING_VARIANT})"
+else:
+    embedding_label = f"ON – {EMBEDDING_VARIANT}"
+
+metrics_path = os.path.join(OUT_DIR, "metrics_all_runs.txt")
+with open(metrics_path, "a") as f:
+    f.write("\n" + "=" * 55 + "\n")
+    f.write(f"Run date:          {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}\n")
     f.write(f"Target:            {TARGET}\n")
-    f.write(f"Speech embeddings: {'ON' if USE_SPEECHES else 'OFF'}\n")
+    f.write(f"Speech embeddings: {embedding_label}\n")
+    f.write(f"Seed:              {SEED}\n")
     f.write(f"Cutoff date:       {CUTOFF_DATE.date()}\n")
     f.write(f"Test quarters:     {len(test_dates)}\n")
     f.write(f"  ({test_dates.min().date()} -> {test_dates.max().date()})\n")
     f.write(f"\nMAE   = {mae:,.4g}\n")
     f.write(f"SMAPE = {smape_val:.2f}%\n")
-print(f"Metrics saved -> {metrics_path}")
+print(f"Metrics appended -> {metrics_path}")
 
 # ── 9. Plot ─────────────────────────────────────────────────────────────────────
 _units = {"GDP": "Billions USD", "CPI": "Index (1982-84=100)"}
@@ -370,7 +415,7 @@ ax.fill_between(test_dates,
                 color="tomato", alpha=0.15,
                 label="10\u201390% prediction interval")
 
-ax.set_title(f"TFT: 1-quarter-ahead {TARGET} prediction  |  quantile output")
+ax.set_title(f"TFT: 1-quarter-ahead {TARGET} prediction  |  quantile output  |  embeddings: {embedding_label}")
 ax.set_xlabel("Date")
 ax.set_ylabel(y_label)
 ax.legend(loc="upper left")
@@ -380,3 +425,51 @@ plot_path = os.path.join(OUT_DIR, f"tft_{TARGET.lower()}_predictions_{suffix}.pn
 plt.savefig(plot_path, dpi=150)
 print(f"Plot saved    -> {plot_path}")
 plt.close()
+
+
+# ── 10. Variable importance (TFT interpretability) ───────────────────────────────
+# TFT's variable selection networks assign a weight to each input at every
+# time step.  We accumulate those weights over the full training set to get
+# stable importance scores.
+print("\nComputing variable importance …")
+
+raw_preds = best_tft.predict(
+    train_dl, mode="raw", trainer_kwargs={"accelerator": "auto"}
+)
+interpretation = best_tft.interpret_output(raw_preds, reduction="sum")
+
+# ── 10a. Plot (using built-in helper) ────────────────────────────────────────
+figs = best_tft.plot_interpretation(interpretation)
+for fig_name, fig in figs.items():
+    fig.suptitle(f"Target: {TARGET}  |  embeddings: {embedding_label}", fontsize=9, y=1.01)
+    fig_path = os.path.join(OUT_DIR, f"importance_{TARGET.lower()}_{suffix}_{fig_name}.png")
+    fig.savefig(fig_path, bbox_inches="tight", dpi=150)
+    plt.close(fig)
+    print(f"Importance plot saved -> {fig_path}")
+
+# ── 10b. Save ranked importance table as CSV ─────────────────────────────────
+importance_rows = []
+label_map = {
+    "encoder_variables": "encoder (past covariates)",
+    "decoder_variables": "decoder (future-known)",
+    "static_variables":  "static",
+}
+for key, label in label_map.items():
+    if key not in interpretation:
+        continue
+    scores = interpretation[key].cpu().numpy()
+    names  = (
+        best_tft.encoder_variables if key == "encoder_variables"
+        else best_tft.decoder_variables if key == "decoder_variables"
+        else best_tft.static_variables
+    )
+    for name, score in sorted(zip(names, scores), key=lambda t: -t[1]):
+        importance_rows.append({"role": label, "variable": name, "importance": round(float(score), 6)})
+
+importance_df = pd.DataFrame(importance_rows)
+importance_csv = os.path.join(OUT_DIR, f"importance_{TARGET.lower()}_{suffix}.csv")
+importance_df.to_csv(importance_csv, index=False)
+print(f"Importance table saved -> {importance_csv}")
+print("\n── Variable importance (encoder) ─────────────────────────────────────────")
+print(importance_df[importance_df["role"] == "encoder (past covariates)"]
+      .head(20).to_string(index=False))

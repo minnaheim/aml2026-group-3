@@ -1,0 +1,152 @@
+
+=======================================================
+Run date:          2026-05-06 22:26
+Target:            GDP
+Speech embeddings: ON � mean_full
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 779.3
+SMAPE = 3.03%
+
+=======================================================
+Run date:          2026-05-06 22:33
+Target:            GDP
+Speech embeddings: ON � mean_full
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 840.3
+SMAPE = 3.16%
+
+=======================================================
+Run date:          2026-05-06 22:44
+Target:            GDP
+Speech embeddings: ON � mean_full
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 671.7
+SMAPE = 2.54%
+
+=======================================================
+Run date:          2026-05-06 22:50
+Target:            GDP
+Speech embeddings: ON � mean_full
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 1,263
+SMAPE = 4.85%
+
+=======================================================
+Run date:          2026-05-06 23:03
+Target:            GDP
+Speech embeddings: ON � mean_full__shuffled
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 517.7
+SMAPE = 2.06%
+
+=======================================================
+Run date:          2026-05-06 23:06
+Target:            GDP
+Speech embeddings: ON � mean_full
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 595.8
+SMAPE = 2.32%
+
+=======================================================
+Run date:          2026-05-06 23:08
+Target:            GDP
+Speech embeddings: ON � mean_full
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 559.3
+SMAPE = 2.17%
+
+=======================================================
+Run date:          2026-05-06 23:09
+Target:            GDP
+Speech embeddings: ON � mean_full__shuffled
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 537.9
+SMAPE = 2.11%
+
+=======================================================
+Run date:          2026-05-06 23:11
+Target:            GDP
+Speech embeddings: OFF
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 747.7
+SMAPE = 2.89%
+
+=======================================================
+Run date:          2026-05-06 23:13
+Target:            GDP
+Speech embeddings: OFF
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 512
+SMAPE = 2.09%
+
+=======================================================
+Run date:          2026-05-06 23:21
+Target:            CPI
+Speech embeddings: ON � mean_full
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 4.206
+SMAPE = 1.48%
+
+=======================================================
+Run date:          2026-05-06 23:22
+Target:            CPI
+Speech embeddings: OFF
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 6.076
+SMAPE = 2.04%
+
+=======================================================
+Run date:          2026-05-06 23:26
+Target:            CPI
+Speech embeddings: ON � mean_full__shuffled
+Seed:              42
+Cutoff date:       2018-01-01
+Test quarters:     32
+  (2018-01-01 -> 2025-10-01)
+
+MAE   = 6.219
+SMAPE = 2.15%
