@@ -15,6 +15,19 @@ class DataFrameBuilder:
       "fomc-roberta": "data/embeddings/fomc-roberta/embeddings_pca_mean_full_fomc-roberta.csv",
   }  
   
+  # include district mapping of board and all regional districts
+  # note: Board and NY always vote, others are in voting groups
+  # available at: https://www.stlouisfed.org/open-vault/2022/nov/fomc-voting-rotation-explained
+  DISTRICT_MAPPING = {
+        "Board of Governors": "BOARD",
+        "Federal Reserve Bank of New York": "NY", "Federal Reserve Bank of Atlanta": "ATL",
+        "Federal Reserve Bank of Boston": "BOS", "Federal Reserve Bank of Philadelphia": "PHI",
+        "Federal Reserve Bank of Richmond": "RIC", "Federal Reserve Bank of Cleveland": "CLE",
+        "Federal Reserve Bank of Chicago": "CHI", "Federal Reserve Bank of St. Louis": "STL",
+        "Federal Reserve Bank of Minneapolis": "MIN", "Federal Reserve Bank of Kansas City": "KC",
+        "Federal Reserve Bank of Dallas": "DAL", "Federal Reserve Bank of San Francisco": "SF"
+    }  
+
   def __init__(self, path: str | None = None, embedding: str | None = None):
     if path is None:
       self.path = os.getcwd()
@@ -40,6 +53,37 @@ class DataFrameBuilder:
     df = df.rename(columns = {'Unnamed: 0':'date'})
     df['date'] = pd.to_datetime(df['date'])
     return df
+
+  # add when voting
+  def _is_voter(self, row):
+        """Logic to determine if a speaker was a voter at time of speech."""
+        year = row['Date'].year
+        dist = row['District']
+        
+        # permanent voters
+        if dist in ["BOARD", "NY"]:
+            return 1
+        
+        # group 1: BOS, STL, KC (vote in 2028, 2025, 2022...)
+        if dist in ["BOS", "STL", "KC"]:
+            return 1 if (year - 2028) % 3 == 0 else 0
+            
+        # group 2: CLE, CHI rotate every TWO years with CHI in odd years
+        if dist in ["CLE", "CHI"]:
+            # Chicago votes in odd years, Cleveland in even years
+            if dist == "CHI":
+                return 1 if year % 2 != 0 else 0
+            if dist == "CLE":
+                return 1 if year % 2 == 0 else 0
+
+        # group 3: ATL, RIC, SF (3-year cycle, 2027 ...)
+        if dist in ["ATL", "RIC", "SF"]:
+            return 1 if (year - 2027) % 3 == 0 else 0
+
+        # 5. Group 4: PHI, DAL (3-year cycle, 2026 ...)
+        if dist in ["PHI", "DAL", "MIN"]:
+            return 1 if (year - 2026) % 3 == 0 else 0
+        return 0
   
   # load speech embeddings based on chris's logic
   def load_speech_embeddings(
@@ -79,6 +123,14 @@ class DataFrameBuilder:
             )
         df = pd.read_csv(speech_path, parse_dates=["Date"])
         df = df.sort_values("Date").reset_index(drop=True)
+        
+        # simplify using district mapping
+        if 'Bank' in df.columns:
+            df['District'] = df['CentralBank'].map(self.DISTRICT_MAPPING)
+        
+        # apply the voting logic to every speech
+        df['is_voter'] = df.apply(self._is_voter, axis=1)
+        
         self.speeches_df = df
         self.pca_cols    = sorted(c for c in df.columns if c.startswith("pca_"))
         print(
@@ -109,11 +161,19 @@ class DataFrameBuilder:
       res = {}
       for col in self.pca_cols:
           if len(sub) > 0:
+              
+              # new feautre: how many speeches were held be voters?
+              res['voter_speech_ratio'] = float(sub['is_voter'].mean())
+              
               res[f"{col}_mean"] = float(sub[col].mean())
               res[f"{col}_std"] = float(sub[col].std()) if len(sub) > 1 else 0.0
           else:
+              
+              res['voter_speech_ratio'] = 0.0
+              
               res[f"{col}_mean"] = 0.0
               res[f"{col}_std"] = 0.0
+            
       return res
  
   def _add_speech_features(self, df: pd.DataFrame) -> pd.DataFrame:
