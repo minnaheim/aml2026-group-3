@@ -68,17 +68,18 @@ class ARRunner:
             enforce_stationarity=False,
             enforce_invertibility=False,
         )
-        return model.fit(maxiter=1000, disp=False)
+        self._fit            = model.fit(maxiter=1000, disp=False)
+        self._last_train_val = series.iloc[-1]
+        self._transform_type = transform
+        return self._fit
 
         # step = 12 because MAX_ENCODER_LENGTH
     def predict(self, splits, target: str = "CPI", fold: int = 0, step: int = 12) -> pd.DataFrame:
-        train  = self.dfb.get_data(splits, train=True, model="AR", target=target, fold=fold)
+        train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
         test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
 
-        freq = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
-        _, transform = self._transform(train.set_index("date")[target], target)
-
-        test_len  = len(test)
+        freq     = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
+        test_len = len(test)
         windows: list[pd.DataFrame] = []
 
         for start in range(0, test_len, step):
@@ -87,26 +88,18 @@ class ARRunner:
             test_window = test.iloc[start:end]
 
             # context = train + observed test up to (but not including) this window
-            # context_end = start so we don't leak the prediction window into the refit
-            context_end = start
-
+            # context_end = start so we don't leak the prediction window into the apply
             # create new train df, based on how far along
-            context_raw    = pd.concat([train, test.iloc[:context_end]], ignore_index=True)
+            context_raw    = pd.concat([train, test.iloc[:start]], ignore_index=True)
             context_series = context_raw.set_index("date")[target]
             stationary_ctx, _ = self._transform(context_series, target)
 
-            # refit AR(1) on expanding context (mirrors TFT retraining on more data each window)
-            ctx_model = SARIMAX(
-                stationary_ctx.asfreq(freq),
-                order=(1, 0, 0),
-                seasonal_order=(0, 0, 0, 0),
-                enforce_stationarity=False,
-                enforce_invertibility=False,
-            )
-            ctx_fit      = ctx_model.fit(maxiter=1000, disp=False)
-            forecast_raw = ctx_fit.get_forecast(steps=window_size).predicted_mean.values
+            # expanding context mirrors TFT: same fixed params (from run()), but encoder sees more observed data
+            # .apply() keeps the fitted params from run(), no refit
+            ctx_result   = self._fit.apply(stationary_ctx.asfreq(freq))
+            forecast_raw = ctx_result.get_forecast(steps=window_size).predicted_mean.values
             # transform back to non-log; anchor on last raw value of context (not just train)
-            forecast = self._invert(forecast_raw, context_series.iloc[-1], transform)
+            forecast     = self._invert(forecast_raw, context_series.iloc[-1], self._transform_type)
 
             windows.append(pd.DataFrame({
                 "date":      test_window["date"].values,
@@ -118,9 +111,6 @@ class ARRunner:
         return pd.concat(windows, ignore_index=True)
 
 
-
-
-        
 # ---------------------------------------------------------------------------
 # ARIMA Runner
 # ---------------------------------------------------------------------------
@@ -205,7 +195,6 @@ class ARIMARunner:
 
         freq   = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
         series = train.set_index("date")[target]
-
         stationary, transform = self._transform(series, target)
 
         # use end of training data as selection window for order search
@@ -224,20 +213,29 @@ class ARIMARunner:
 
         self._save_orders("global", cached_orders)
 
+        model = SARIMAX(
+            stationary.asfreq(freq),
+            order=order,
+            seasonal_order=seasonal_order,
+            enforce_stationarity=False,
+            enforce_invertibility=False,
+        )
+        self._fit            = model.fit(maxiter=250, disp=False)
+        self._last_train_val = series.iloc[-1]
+        self._transform_type = transform
+
         print(f"[ARIMA | {target}] order={order}, seasonal={seasonal_order}, "
               f"transform={transform}, n_train={len(stationary)}")
 
         return order, seasonal_order
 
     # step = 12 because MAX_ENCODER_LENGTH
-    def predict(self, order, seasonal_order, splits, target: str = "CPI", fold: int = 0, step: int = 12) -> pd.DataFrame:
+    def predict(self, splits, target: str = "CPI", fold: int = 0, step: int = 12) -> pd.DataFrame:
         train = self.dfb.get_data(splits, train=True,  model="ARIMA", target=target, fold=fold)
         test  = self.dfb.get_data(splits, train=False, model="ARIMA", target=target, fold=fold)
 
-        freq = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
-        _, transform = self._transform(train.set_index("date")[target], target)
-
-        test_len  = len(test)
+        freq     = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
+        test_len = len(test)
         windows: list[pd.DataFrame] = []
 
         for start in range(0, test_len, step):
@@ -246,25 +244,18 @@ class ARIMARunner:
             test_window = test.iloc[start:end]
 
             # context = train + observed test up to (but not including) this window
-            # context_end = start so we don't leak the prediction window into the refit
-            context_end = start
+            # context_end = start so we don't leak the prediction window into the apply
             # create new train df, based on how far along
-            context_raw    = pd.concat([train, test.iloc[:context_end]], ignore_index=True)
+            context_raw    = pd.concat([train, test.iloc[:start]], ignore_index=True)
             context_series = context_raw.set_index("date")[target]
             stationary_ctx, _ = self._transform(context_series, target)
 
-            # refit ARIMA on expanding context with same order from run() (mirrors TFT: same arch, more data)
-            model = SARIMAX(
-                stationary_ctx.asfreq(freq),
-                order=order,
-                seasonal_order=seasonal_order,
-                enforce_stationarity=False,
-                enforce_invertibility=False,
-            )
-            res          = model.fit(maxiter=250, disp=False)
-            forecast_raw = res.get_forecast(steps=window_size).predicted_mean.values
+            # expanding context mirrors TFT: same fixed params (from run()), but model sees more observed data
+            # .apply() keeps the fitted params from run(), no refit
+            ctx_result   = self._fit.apply(stationary_ctx.asfreq(freq))
+            forecast_raw = ctx_result.get_forecast(steps=window_size).predicted_mean.values
             # transform back to non-log; anchor on last raw value of context (not just train)
-            forecast     = self._invert(forecast_raw, context_series.iloc[-1], transform)
+            forecast     = self._invert(forecast_raw, context_series.iloc[-1], self._transform_type)
 
             windows.append(pd.DataFrame({
                 "date":      test_window["date"].values,

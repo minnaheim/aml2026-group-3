@@ -187,9 +187,9 @@ def main():
         # add arima order for each variable
         print("\n[ARIMA]")
         arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=0)
-        arima_df = arima_runner.predict(arima_order, arima_seasonal, splits, target=target, fold=0)
+        arima_df = arima_runner.predict(splits, target=target, fold=0)
         results["ARIMA"][target] = arima_df
-        print(f"  → {len(arima_df)} predictions  (order={arima_order}, seasonal={arima_seasonal})")
+        print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
         print("\n[TFT – training]")
         ckpt = tft_runner.run(
