@@ -114,8 +114,8 @@ class TFTRunner:
                       if f"{c}_lag_{l}" in train_df.columns]
         
         # if pca present
-        # pca_cols_present = [c for c in self.dfb.pca_cols if c in train_df.columns]
-        pca_cols_present = []
+        pca_cols_present = [c for c in self.dfb.pca_cols if c in train_df.columns]
+
 
         meta_cat_cols  = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
                           for c in ('meta_units', 'meta_frequency')

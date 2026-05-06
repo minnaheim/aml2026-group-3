@@ -54,9 +54,7 @@
 
 
 #### minna's todos:
-
 - kafka embeddings 
-- merge to main
 
 #### anna's todo:
 - finish anna/tft
