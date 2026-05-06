@@ -23,15 +23,22 @@
 - [ ] Get up and running!! (WIP)
 
 ## Decisions
-### Speech Data
+### Data Sources
 - Merge speaker metadata to clenaed speeches: metadata only covers FRB presidents and Board members, speeches also included from deputy presidents and senior staff. We keep these speeches for now, check later if the information content maybe different.
   - Source: Central Bank Communication: New Data and Stylized Facts From a Century of Fed Speeches with Thomas Lustenberger and Enzo Rossi, under revision for the SNB Working Paper.
   - Please do not circulate until working paper available. Then, please cite.
+ 
+- Beige Book Index: economic sentiment index derived via text analysis of Federal Reserve Beige Books by Gascon, Charles S and Martorana, Joseph, Quantifying the Beige Book’s ‘Soft’ Data, 2025
+- FOMC Dissents Data: record of dissents on FOMC monetary policy votes from 1936 to 2025 (continuously updated) by Thornton, Daniel L and Wheelock, David C, Making Sense of Dissents: A History of FOMC Dissents, 2014.
+- Tealbook (formerly Greenbook): projections for many of the variables also forecast in the Federal Reserve Bank of Philadelphia's Survey of Professional Forecasters
+  - However: only published five years after the FOMC Meeting, so not relevant for our forecasting purpose after all
+  - https://www.philadelphiafed.org/surveys-and-data/real-time-data-research/greenbook
  
 ### Alignment
 - Keep in mind: Fed has blackout period for 10 days before FOMC
 - Give calendar-weights: have the days to the next FOMC meeting as an additional input / covariate. This should work quite well since (almost) all FOMC are pre-scheduled (excep for e.g., 9/11) and thus, there shouldn't be any data leakage
   - Should be determined within TFT
+ 
 
 
 
