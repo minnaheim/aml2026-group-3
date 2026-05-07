@@ -6,9 +6,11 @@
 
 ### EMBEDDINGS
 - [ ] Test different methods => be creative
-- [ ] PCA should be fitted until 2014 or so only (so until the end of the very first tft training data)
-  - so for pre-2014 speeches, use fit_transform
+- [ ] PCA should be fitted until 2011-01-01 or so only (so until the end of the very first tft training data)
+  - so for pre-2011 speeches, use fit_transform
   - for everything later, use transform only
+  - RERUN: Implement in data_frame_builder and rerun with cutoff on 2011-01-01 => i mistakenly ran it with cutoff 2014-01-01
+- [ ] Normalize PCA: probably necessary! if it were to dramatically decrease performance, ask David
       
 ### TFT
 - [ ] Additional metadata from FRED
