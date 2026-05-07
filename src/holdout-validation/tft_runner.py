@@ -123,9 +123,14 @@ class TFTRunner:
         meta_real_cols = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
                           for c in ('meta_popularity', 'meta_years_of_history')
                           if f"{v}_{c}" in train_df.columns]
+        
+         # hold out the last MAX_PREDICTION_LENGTH rows as a true validation window                                                                                                                                                                    
+         # so val_loss reflects out-of-sample fit within the training period                                                                                                                                                                           
+        fit_df = train_df.iloc[:-self.MAX_PREDICTION_LENGTH]           
 
         training = TimeSeriesDataSet(
-            data=train_df,
+            data=fit_df,
+            # data=train_df,
             time_idx='time_idx',
             target=target,
             group_ids=['series_id'],
@@ -210,6 +215,8 @@ class TFTRunner:
         self._train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
         print("Got data from data_frame_builder...")
         train_df = self._add_tft_vars(self._train_raw, target)
+        print("*************************** columns of the train_df (to check that no embeddings inside) ***************************")
+        print(train_df.columns[1:50])
 
         self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
         print("Created TimeSeriesDataSet for tft...")
