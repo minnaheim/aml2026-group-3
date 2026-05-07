@@ -458,7 +458,7 @@ class DataFrameBuilder:
 # # marco-only, so as before
 # dfb = DataFrameBuilder(path)
 # df  = dfb.process_data()
-#
+
 # # with FOMC speech embeddings
 # dfb = DataFrameBuilder(path).load_speech_embeddings()
 # df  = dfb.process_data()   # pca_* columns now present in df
@@ -473,13 +473,15 @@ class DataFrameBuilder:
 # print(f"Holdout: [{holdout['date'].min().date()} – {holdout['date'].max().date()}] ({len(holdout)} rows)")
 
 
-# # quick sanity check
+# # # quick sanity check
 # tft_train = dfb.get_data(splits, fold=0, train=True,  model="TFT")
-# tft_test   = dfb.get_data(splits, fold=0, train=False, model="TFT", target= "CPI")
-# ar_train  = dfb.get_data(splits, fold=0, train=True,  model="AR",  target="CPI")
-# ar_test   = dfb.get_data(splits, fold=0, train=False, model="ARIMA",  target="GDP")
+
+# # tft_test   = dfb.get_data(splits, fold=0, train=False, model="TFT", target= "CPI")
+# # ar_train  = dfb.get_data(splits, fold=0, train=True,  model="AR",  target="CPI")
+# # ar_test   = dfb.get_data(splits, fold=0, train=False, model="ARIMA",  target="GDP")
 
 # print(f"TFT train : {len(tft_train)} daily rows   | cols: {list(tft_train.columns)}")
+
 # print(f"TFT test : {len(tft_test)} daily rows   | cols: {list(tft_test.columns)}")
 # print(f"AR  train : {len(ar_train)} monthly rows | cols: {list(ar_train.columns)}")
 # print(f"ARIMA  test  : {len(ar_test)} quarterly rows  | cols: {list(ar_test.columns)}")

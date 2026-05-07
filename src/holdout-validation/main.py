@@ -137,6 +137,10 @@ def main():
         "--device", default="cpu", choices=["cpu", "mps", "cuda"],
         help="Compute device for TFT (default: cpu)",
     )
+    parser.add_argument(
+        "--embedding", default=None, choices=["fomc-roberta"],
+        help="Speech embedding to include (default: none — macro-only mode)",
+    )
     args = parser.parse_args()
 
     root    = Path(__file__).parent.parent.parent
@@ -145,13 +149,14 @@ def main():
     if args.wandb:
         _setup_wandb()
 
-    print(f"Targets : {args.targets}")
-    print(f"Device  : {args.device}")
-    print(f"W&B     : {args.wandb}")
-    print(f"Output  : {out_dir}\n")
+    print(f"Targets   : {args.targets}")
+    print(f"Device    : {args.device}")
+    print(f"Embedding : {args.embedding or 'none'}")
+    print(f"W&B       : {args.wandb}")
+    print(f"Output    : {out_dir}\n")
 
     # ── 1. split the data acc. to data-frame-builder ─────────────────────────
-    dfb = DataFrameBuilder(str(root))
+    dfb = DataFrameBuilder(str(root), embedding=args.embedding)
     df  = dfb.process_data()
     splits, holdout = dfb.generate_split(df)
 

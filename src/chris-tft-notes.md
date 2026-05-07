@@ -55,6 +55,8 @@
 
 #### minna's todos:
 - kafka embeddings 
+- check if gdp predicts 12 months or 4 years
+- (add 2nd fold) once david approves
 
 #### anna's todo:
 - finish anna/tft
@@ -77,7 +79,6 @@
 - more folds
 - different alignment strategies
 - different forecast horizon possibilities, which to choose? what is most scientific?
-  - option 1
-  - option 2
-  - option 3
+  - all predict in one go the test length (=12 years)
+  - all predict with model params in steps=12 (aka 12months, or 4 years if quarterly)
 - ARIMA benchmark too good, can we handicap it a bit? 
