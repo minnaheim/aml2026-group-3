@@ -58,6 +58,7 @@ def compute_metrics(df: pd.DataFrame) -> dict:
 
 # ── save ─────────────────────────────────────────────────────────────────────
 
+# TODO: change here to sort by target
 def save_results(results: dict, out_dir: Path) -> pd.DataFrame:
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -68,6 +69,7 @@ def save_results(results: dict, out_dir: Path) -> pd.DataFrame:
             rows.append({"model": model, "target": target, **m})
 
     metrics_df = pd.DataFrame(rows)[["model", "target", "MAE", "RMSE", "MAPE"]]
+    metrics_df = metrics_df.sort_values(by=["target", "model"]).reset_index(drop=True)
     metrics_df.to_csv(out_dir / "metrics.csv", index=False)
     print("\n=== Evaluation Metrics ===")
     print(metrics_df.to_string(index=False))

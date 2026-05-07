@@ -27,7 +27,7 @@ class TFTRunner:
     MAX_ENCODER_LENGTH = 24 # 2-year monthly lookback
     MAX_PREDICTION_LENGTH = 12 # 12-month forecast horizon
     PATIENCE = 5
-    MAX_EPOCHS = 3
+    MAX_EPOCHS = 50
     LEARNING_RATE = 0.03
 
     def __init__(self, dfb):
@@ -153,7 +153,8 @@ class TFTRunner:
                   use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu'):
         """Build trainer + TFT, fit, return best checkpoint path."""
         callbacks = [
-            EarlyStopping(monitor='train_loss', min_delta=1e-2,
+            # changed this to val_loss -> train-loss will usually increase, even if val_loss stops
+            EarlyStopping(monitor='val_loss', min_delta=1e-2,
                           patience=self.PATIENCE, verbose=False, mode='min'),
         ]
         if use_wandb:
@@ -173,7 +174,7 @@ class TFTRunner:
             accelerator=accelerator,
             devices=1,
             gradient_clip_val=0.25,
-            limit_train_batches=5,
+            # limit_train_batches=60,
             callbacks=callbacks,
             enable_model_summary=True,
             logger=logger,
@@ -182,8 +183,8 @@ class TFTRunner:
         tft = TemporalFusionTransformer.from_dataset(
             training_ds,
             learning_rate=self.LEARNING_RATE,
-            lstm_layers=2,
-            hidden_size=16,
+            lstm_layers=4, # before was 2
+            hidden_size=64, # before this was 16
             attention_head_size=2,
             dropout=0.2,
             hidden_continuous_size=8,
