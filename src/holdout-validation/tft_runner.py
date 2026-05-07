@@ -133,9 +133,15 @@ class TFTRunner:
             max_prediction_length=self.MAX_PREDICTION_LENGTH,
             static_categoricals=['series_id'] + meta_cat_cols,
             static_reals=meta_real_cols,
-            time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday'],
+            time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday',
+                                      # also add the fomc dates here since they are well known in advance
+                                      # there are like very few exceptions, I think 9/11 was one of them
+                                      'days_to_fomc', 'days_since_fomc', 'fomc_cycle_pos', 'meeting_this_month'],
             # speeches are time varying, so i add them here!
-            time_varying_unknown_reals=covariates + lag_cols + pca_cols_present,
+            time_varying_unknown_reals= [*covariates, *lag_cols, *pca_cols_present,
+                                         # add dissents
+                                         'dissent_rate_mean', 'dissent_net_hawk_mean', 'dissent_net_hawk_sum',    
+                                         'n_tighter_sum', 'n_easier_sum', 'any_dissent_recent'],
             target_normalizer=EncoderNormalizer(transformation="softplus"),
             add_relative_time_idx=True,
             add_target_scales=True,

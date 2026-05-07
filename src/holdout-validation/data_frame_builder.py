@@ -41,6 +41,9 @@ class DataFrameBuilder:
     self.QUARTERLY_TARGETS = {"GDP"} # quarterly frequency
     self.MONTHLY_TARGETS   = {"CPI", "PAYEMS", "INDPRO", "UNRATE"}
     
+    # add fomc dissents
+    self.dissent_df: pd.DataFrame | None = None
+    
     # populated by load_speech_embeddings(); None means speeches not loaded.
     self._embedding_name = embedding
     self.speeches_df: pd.DataFrame | None = None
@@ -85,6 +88,109 @@ class DataFrameBuilder:
             return 1 if (year - 2026) % 3 == 0 else 0
         return 0
   
+  
+  def load_fomc_dissent(self, path: str | None = None) -> "DataFrameBuilder":
+        """Load FOMC dissent data from Thortnon Wheelock.
+        
+        Columns from xlsx are: FOMC Meeting (MM.DD.YY), Dissent (Y or N),
+        FOMC Votes, Votes for Action, Votes Against Action,
+        No. Governors for Tighter/Easier, No. Presidents for Tighter/Easier,
+        Dissenters Tighter, Dissenters Easier, Dissenters Other => all three with last names and comma separated
+        
+        ALSO: the file provides a complete list of fomc meeting dates which we will use 
+        thus avoiding introducing an additional data source
+        """
+        dissent_path = path or (Path(self.path) / "data/FOMC_Dissents_Data.xlsx")
+        df = pd.read_excel(dissent_path, skiprows = 3)
+
+        # parse the MM.DD.YY date column
+        df["date"] = pd.to_datetime(df["FOMC Meeting"], format="%m.%d.%y")
+        df = df.sort_values("date").reset_index(drop=True)
+
+        # normalise column names (strip whitespace)
+        df.columns = df.columns.str.strip()
+
+        # count dissents by direction
+        # notes for the TAs and readers: in the FOMC, the monetary policy making body of the Fed
+        # the Chair (until May 2026, Jay Powell) proposes to set rates at X, i.e., a potential Y basis points change
+        # then, the governors (from the Board) and the regional presidents (with voting rights) can vote on this
+        # if they dissent, they can dissent in favor of tighter policy (X_dissent > X), so a (stronger) rate hike,
+        # or in favor of easier policy (X_dissent < X) THAN THE CHAIR
+        # this direction (so compared to the Chair) determines the "tighter vs. easier"
+        df["n_tighter"] = (
+            df["No. Governors for Tighter"].fillna(0)
+            + df["No. Presidents for Tighter"].fillna(0)
+        ).astype(int)
+        df["n_easier"] = (
+            df["No. Governors for Easier"].fillna(0)
+            + df["No. Presidents for Easier"].fillna(0)
+        ).astype(int)
+        df["n_other"]  = df["Votes Against Action"].fillna(0).astype(int) - df["n_tighter"] - df["n_easier"]
+        df["n_other"]  = df["n_other"].clip(lower=0)  # guard rounding edge cases
+
+        # net hawkish dissent: +1 per tighter dissenter, -1 per easier dissenter
+        # hawkish means = favoring tighter policy
+        df["dissent_net_hawk"] = df["n_tighter"] - df["n_easier"]
+
+        # dissent intensity: share of voters who dissented
+        df["dissent_rate"] = df["Votes Against Action"].fillna(0) / df["FOMC Votes"].fillna(10)
+
+        # named dissenters
+        def _count_names(cell):
+            if pd.isna(cell) or str(cell).strip() == "":
+                return 0
+            return len([n.strip() for n in str(cell).split(",") if n.strip()])
+
+        df["n_named_tighter"] = df["Dissenters Tighter"].apply(_count_names)
+        df["n_named_easier"]  = df["Dissenters Easier"].apply(_count_names)
+
+        self.dissent_df = df
+
+        return self
+  
+  
+  def _add_fomc_timing_features(self, df: pd.DataFrame) -> pd.DataFrame:
+      
+    """Add FOMC meeting cycle features to a monthly DataFrame.
+
+    Features added
+    --------------
+    days_since_fomc   : calendar days since the last FOMC meeting as of month-start
+    days_to_fomc      : calendar days until the next FOMC meeting as of month-start
+    fomc_cycle_pos    : position within cycle — days_since / (days_since + days_to)
+                        0 = just had a meeting, 1 = meeting is today
+    meeting_this_month: 1 if an FOMC meeting falls in the same calendar month
+    """
+    # use meeting dates from dissents :)
+    meetings = self.dissent_df["date"].sort_values().reset_index(drop=True)
+        
+    since, to, pos, flag = [], [], [], []
+
+    for ts in df["date"]:
+        past   = meetings[meetings <= ts]
+        future = meetings[meetings >  ts]
+
+        d_since = (ts - past.iloc[-1]).days   if len(past)   > 0 else np.nan
+        d_to    = (future.iloc[0] - ts).days  if len(future) > 0 else np.nan
+
+        cycle_pos = d_since / (d_since + d_to) if (not np.isnan(d_since) and not np.isnan(d_to) and (d_since + d_to) > 0) else np.nan
+
+        # flag months that contain a meeting
+        same_month = ((meetings.dt.year == ts.year) & (meetings.dt.month == ts.month)).any()
+
+        since.append(d_since)
+        to.append(d_to)
+        pos.append(cycle_pos)
+        flag.append(int(same_month))
+
+    df["days_since_fomc"]    = since
+    df["days_to_fomc"]       = to
+    df["fomc_cycle_pos"]     = pos       # continuous [0, 1)
+    df["meeting_this_month"] = flag      # binary
+
+    return df
+  
+  
   # load speech embeddings based on chris's logic
   def load_speech_embeddings(
         self,
@@ -125,7 +231,8 @@ class DataFrameBuilder:
         df = df.sort_values("Date").reset_index(drop=True)
         
         # simplify using district mapping
-        if 'Bank' in df.columns:
+        # fixed typo here :)
+        if 'CentralBank' in df.columns:
             df['District'] = df['CentralBank'].map(self.DISTRICT_MAPPING)
         
         # apply the voting logic to every speech
@@ -138,6 +245,10 @@ class DataFrameBuilder:
             f"with {len(self.pca_cols)} PCA dims "
             f"({df['Date'].min().date()} → {df['Date'].max().date()})"
         )
+        
+        # when loading speeches, also always load dissents
+        self.load_fomc_dissent()
+        
         return self
       
       
@@ -153,24 +264,23 @@ class DataFrameBuilder:
           (self.speeches_df["Date"] >= window_start)
           & (self.speeches_df["Date"] < quarter_start)
       )
-      sub = self.speeches_df.loc[mask, self.pca_cols]
+      sub = self.speeches_df.loc[mask, self.pca_cols + ['is_voter']] # keep the is voter coulmn here
       if len(sub) == 0:
           sub = self.speeches_df.loc[
-              self.speeches_df["Date"] < quarter_start, self.pca_cols
+              self.speeches_df["Date"] < quarter_start, self.pca_cols + ['is_voter']
           ]
       res = {}
-      for col in self.pca_cols:
-          if len(sub) > 0:
-              
-              # new feautre: how many speeches were held be voters?
-              res['voter_speech_ratio'] = float(sub['is_voter'].mean())
-              
-              res[f"{col}_mean"] = float(sub[col].mean())
+
+      if len(sub) > 0:
+          # new feautre: how many speeches were held be voters?
+          # fixed here by moving outside loop
+          res['voter_speech_ratio'] = float(sub['is_voter'].mean()) 
+          for col in self.pca_cols: 
+              res[f"{col}_mean"] = float(sub[col].mean()) 
               res[f"{col}_std"] = float(sub[col].std()) if len(sub) > 1 else 0.0
-          else:
-              
-              res['voter_speech_ratio'] = 0.0
-              
+      else: 
+          res['voter_speech_ratio'] = 0.0
+          for col in self.pca_cols:
               res[f"{col}_mean"] = 0.0
               res[f"{col}_std"] = 0.0
             
@@ -201,6 +311,46 @@ class DataFrameBuilder:
       df = df.drop(columns=['_month_start'])
       return df
 
+  def _add_dissent_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df['_month_start'] = df['date'].dt.to_period('M').dt.start_time
+    month_dissent = {
+        ms: self._aggregate_dissent_for_month(ms)
+        for ms in df['_month_start'].unique()
+    }
+    for col_name in list(month_dissent.values())[0].keys():
+        df[col_name] = df['_month_start'].map(lambda ms: month_dissent[ms][col_name])
+    df = df.drop(columns=['_month_start'])
+    return df
+
+
+  def _aggregate_dissent_for_month(self, month_start: pd.Timestamp) -> dict:
+    assert self.dissent_df is not None
+    window_start = month_start - pd.DateOffset(months=SPEECH_WINDOW_MONTHS)
+    mask = (
+        (self.dissent_df["date"] >= window_start)
+        & (self.dissent_df["date"] < month_start)
+    )
+    sub = self.dissent_df.loc[mask]
+
+    if len(sub) == 0: # since many meetings are without dissents
+        return {
+            "dissent_rate_mean":     0.0,
+            "dissent_net_hawk_mean": 0.0,
+            "dissent_net_hawk_sum":  0.0,
+            "n_tighter_sum":         0.0,
+            "n_easier_sum":          0.0,
+            "any_dissent_recent":    0.0,
+        }
+    return {
+        "dissent_rate_mean":     float(sub["dissent_rate"].mean()),
+        "dissent_net_hawk_mean": float(sub["dissent_net_hawk"].mean()),
+        "dissent_net_hawk_sum":  float(sub["dissent_net_hawk"].sum()),
+        "n_tighter_sum":         float(sub["n_tighter"].sum()),
+        "n_easier_sum":          float(sub["n_easier"].sum()),
+        "any_dissent_recent":    float((sub["dissent_rate"] > 0).any()),
+    }
+  
   def process_data(self):
     # SWITCH TO MONTHLY FREQUENCY AS BASE!!
     # --------- get monthly data ---------
@@ -245,6 +395,11 @@ class DataFrameBuilder:
     if self.speeches_df is not None:  # catches both paths
         df = self._add_speech_features(df)
         
+    # add the fomc date and dissent info
+    if self.dissent_df is not None:
+        df = self._add_dissent_features(df)
+        df = self._add_fomc_timing_features(df)
+            
     # trim leading NaNs
     df = df.dropna(subset=['GBP']).reset_index(drop=True)
 
