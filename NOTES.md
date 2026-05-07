@@ -6,7 +6,10 @@
 
 ### EMBEDDINGS
 - [ ] Test different methods => be creative
-
+- [ ] PCA should be fitted until 2014 or so only (so until the end of the very first tft training data)
+  - so for pre-2014 speeches, use fit_transform
+  - for everything later, use transform only
+      
 ### TFT
 - [ ] Additional metadata from FRED
 - [ ] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
