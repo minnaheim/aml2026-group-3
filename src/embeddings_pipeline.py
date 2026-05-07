@@ -18,7 +18,7 @@ Outputs are written to:
 
 Usage examples:
   python embeddings_pipeline.py --model finbert --truncation 512
-  python embeddings_pipeline.py --model finbert --truncation full
+  python embeddings_pipeline.py --model finbert --truncation full --cutoff 2022-01-01
   python embeddings_pipeline.py --model fomc-roberta --truncation full --hf-token hf_YOUR_TOKEN
   python embeddings_pipeline.py --model llama3.1 --truncation full --llama-path /path/to/llama3.1
 """
@@ -115,6 +115,11 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Process only the first N speeches (for testing). Omit to process all.",
+    )
+    p.add_argument(
+        "--cutoff",
+        default=None,
+        help="ISO date (YYYY-MM-DD). PCA is fit only on speeches before this date Should be end of training from TFT. "
     )
     return p.parse_args()
 
@@ -495,13 +500,23 @@ def embed_ollama_full(
 
 def _fit_and_save_pca(
     embeddings: np.ndarray,
+    dates: pd.Series, # added here
+    cutoff_date: pd.Timestamp, # added here
     pooling: str,
     truncation: str,
     model_name: str,
     out_dir: Path,
 ) -> np.ndarray:
+    
+    # fit only on speeches before the cutoff
+    train_mask = dates < cutoff_date
+    print(f"PCA fit on {train_mask.sum()} / {len(dates)} speeches (before {cutoff_date.date()})")
+    
     pca     = PCA(n_components=N_PCA, random_state=RANDOM_STATE)
-    reduced = pca.fit_transform(embeddings)
+    # fit only on training data
+    pca.fit(embeddings[train_mask])
+    # then transform all
+    reduced = pca.transform(embeddings)
 
     cumvar = np.cumsum(pca.explained_variance_ratio_)
     print(f"    PCA ({pooling}): ", end="")
@@ -525,7 +540,11 @@ def save_outputs(
     truncation: str,
     model_name: str,
     out_dir: Path,
+    cutoff_date: pd.Timestamp, # added this here
 ) -> None:
+    # extract date
+    dates = pd.to_datetime(df["Date"])
+    
     meta_df = df[available_meta].copy().reset_index(drop=True)
     if "Date" in meta_df.columns:
         meta_df["Date"] = pd.to_datetime(meta_df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -546,7 +565,7 @@ def save_outputs(
         print(f"    Saved: {full_path.name}  shape={full_df.shape}")
 
         # PCA-reduced embeddings (TFT input)
-        reduced  = _fit_and_save_pca(matrix, pooling, truncation, model_name, out_dir)
+        reduced  = _fit_and_save_pca(matrix, dates, cutoff_date, pooling, truncation, model_name, out_dir)
         pca_cols = [f"pca_{i}" for i in range(N_PCA)]
         pca_df   = pd.concat([meta_df, pd.DataFrame(reduced, columns=pca_cols)], axis=1)
         pca_path = out_dir / f"embeddings_pca_{stem}.csv"
@@ -589,6 +608,9 @@ def main() -> None:
         print(f"  Using sample of {args.sample} speeches.")
     df = df.sort_values("Date").reset_index(drop=True)
     available_meta = [c for c in META_COLS if c in df.columns]
+    
+    # add cutoff date with default = max speech date
+    cutoff_date = pd.Timestamp(args.cutoff) if args.cutoff else df["Date"].max()
 
     out_dir = _output_dir(args.model)
     print(f"  Output dir: {out_dir}")
@@ -607,7 +629,7 @@ def main() -> None:
             cls_matrix, mean_matrix = embed_full(df, tokenizer, model, device, is_decoder_only, hidden_size)
 
     print("\nSaving outputs …")
-    save_outputs(df, available_meta, cls_matrix, mean_matrix, args.truncation, args.model, out_dir)
+    save_outputs(df, available_meta, cls_matrix, mean_matrix, args.truncation, args.model, out_dir, cutoff_date=cutoff_date)
 
     print("\nDone.")
 
