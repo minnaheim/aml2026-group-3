@@ -1,6 +1,33 @@
 # Introduction
 
-# Data Sources
+# Data Sources and the Data Frame Builder
+
+For our analysis, we use three different data types. First, we compile a macroeconomic dataset containing variables such as CPI, GDP and the unemployment rate from the US. All data is taken from FRED. Second, we use a set of Federal Reserve Speeches: both the Bank for International Settlements (BIS) and a recent paper have collected a set of speeches since 1986. Third, we complement these speeches with a variety of speaker and FOMC specific data. This includes speaker characteristics such as their position within the Fed, their highest obtained education, age and gender, but also aspects such as the exogenous FOMC rotation of voting rights (in place since the 1940s) and dissents within the FOMC.
+
+As we will discuss below, we will employ different strategies to embed the speeches. First, I would like to focus on the alignment strategy.
+
+*Note: our working paper will be coming out in the next few weeks. I (Anna) will be spending the summer figuring out how to clean the speeches to a level that we could use them for our analysis. Then, we would have data since 1914 which will allow us to increase the number of folds.*
+
+## Alignment
+
+Since most macroeconomic variables, in particular those which are the ones we are interested in forecasting, are of monthly frequency, we decide to also pursue this approach; we have tested using a daily alignment strategy, however, too many covariates are then not changing over 30 or 90 (for GDP) days which significantly hampered performance.
+
+First, some points on the alignment of the macroeconomic variables: for GDP which is the only lower frequency variable (quarterly), we forward-fill all months without a known value. **We are aware that there are some spot forecasts of GDP in the US. One approach we are yet to implement is to actually include a gap to account for this.** For all variables which are of higher frequency, we simply take the last value of the month. **Anna: My suggestion would be to actually take the last value AND extract the standard deviation over the month. This could signal increased volatility, in particular for the yield spreads.** 
+
+The alignment of the speeches is a more crucial point. Currently, we use somewhat of a rolling window aggregation. For each month $m$, we take the speeches of the last 12 mmonths and compute the mean and standard deviation of each of the 20 PCA dimensions (more below). We complement this with information on how many of these speeches were held by voters, given their influence in the FOMC. **Anna: I think the 12 month look-back is not really helpful for forecasting the business cycle component. We should definitely treat the SPEECH_WINDOW_MONTHS vqariable as a hyperparameter during the cross-validation! This significantly strengthens the argument for more than 1 cross-validation fold.  My guess is that a shorter horizon will improve forecasting!**
+
+### Alignment Of Speeches: Possible Ideas
+
+**ANNA: most importantly, we need to switch the "calculating monthly mean and std of PCA components". This is definitely misplaced.**
+As the most straightforward way, I suggest to use exponential decaying weights, so: the closer the speech is to month $m$, the higher the weight. 
+
+A more innovative idea would be the following: speeches given close around FOMC meetings are more informative. Also, the voting status and the position within the Fed (Chair, Governor, President) definitely matters. We could somehow combine these three aspects, maybe multiplicatively. So, mathematically, we would have something like, each PCA of speech $s$ receives weight $w_s$ such that
+
+$$w_s = w_s^{vote} \times w_s^{fomc} \times w_s^{position}$$
+
+where $w_s^{vote} = 1$ for non-voters and $>1$ for voters; $w_s^{fomc} = \exp(-\lambda d_s^{since}) + exp(-\lambda d_s^{to})$, reflecting that days since and to the next FOMC matter and speeches right around an FOMC meeting are likely more informative. Finally, I think it's best if we don't overengineer the position weight. Instead, simply set Chair = 3, Board = 2 and President = 1.
+
+Even more innovative but possibly a bit beyond this project: use attention-based aggregation, so: speech has key (PCA embeddings) and query (macro state in month of speech). then, calculate attention weights. Intuitively, that would mean that if inflation is high, speeches which talk about price stability and not unemployment get higher weights. I think this might be hard given our data limitations. If we were to continue the project with the speeches from my paper, so since 1914, approx. 10k, maybe it would work.
 
 # Embeddings
 
@@ -41,6 +68,12 @@ As we will discuss during the TFT, we aggreate the embeddings up; this alignment
 Thus, our final output and therefore, input into the TFT, are 20 principal components for each speech, i.e., $N\times 20$.
 
 # Benchmarks
+
+## AR(1) Process
+
+A standard benchmark in macroeconomic forecasting is an AR(1) process.
+
+## ARIMA
 
 # TFT
 
