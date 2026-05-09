@@ -134,7 +134,7 @@ def main():
         help="Enable Weights & Biases logging for TFT training",
     )
     parser.add_argument(
-        "--device", default="cpu", choices=["cpu", "mps", "cuda"],
+        "--device", default="cuda", choices=["cpu", "mps", "cuda"],
         help="Compute device for TFT (default: cpu)",
     )
     parser.add_argument(
