@@ -71,9 +71,19 @@ Thus, our final output and therefore, input into the TFT, are 20 principal compo
 
 ## AR(1) Process
 
-A standard benchmark in macroeconomic forecasting is an AR(1) process.
+A standard benchmark in macroeconomic forecasting is an AR(1) process, i.e., a univariate autoregressive model. We closely align the prediction method with the TFT approach to make the forecasting results comparable.
+
+During training, we first transform the data such that each series is stationary. That means for CPI and GDP, we use a log-diff, yielding the effective growth rate, and we directly take levels for the unemployment rate. An augmented Dickey-Fuller test confirms that the series are stationary. 
+
+For the prediction, we follow the TFT which only has access to its own predictions (plus the training data) and never the actual test observations for the multi-step forecasting. Thus, the AR(1) process performs a forecast for a window of 12 steps. Then, it appends these predictions to the context and performs the subsequent 12 steps of the prediction using the training + the first forecasted window. Thus, the coefficients are fixed and only the context is updated, making it a fair comparison to the TFT.
+
+Since we will be showing the results not in the transformed space but in the original space, we invert the results for the log-differenced data by cumsum-exponatiating to the original units in levels.
 
 ## ARIMA
+
+To expand on the simple AR(1) benchmark, we also fit an ARIMA to the macroeconomic variables. As before, we are handling stationarity by taking log-differences of GDP and CPI which allows us to keep the integration order $d=0$. Then, we use auto arima to find the best lag order, subject to maximal lags of the autoregressive and moving average component, i.e., $p, q \in \{0,1,2,3\}$. The model chooses the optimal ARIMA(p,d=0,q) process based on the Akaike Information Criterion. We also allow the model to identify seasonality for the monthly and quarterly variables. As a fallback if the data is insufficient, so fewer than 24 monthly or 8 quarterly observations, we set an ARIMA(1,0,1). For computational reasons, we cache results; as long as the training data remains the same (meaning the same cutoff date), the results of auto arima are reused.
+
+The prediction method is identical to the AR(1) process.
 
 # TFT
 
