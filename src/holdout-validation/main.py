@@ -138,7 +138,7 @@ def main():
         help="Compute device for TFT (default: cpu)",
     )
     parser.add_argument(
-        "--embedding", default="fomc-roberta", choices=["fomc-roberta", "finbert"], # added finbert here
+        "--embedding", default=None, choices=["fomc-roberta", "finbert"], # added finbert here
         help="Speech embedding to include (default: none — macro-only mode)",
     )
     args = parser.parse_args()
