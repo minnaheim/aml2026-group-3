@@ -216,7 +216,7 @@ class TFTRunner:
         self._train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
         print("Got data from data_frame_builder...")
         train_df = self._add_tft_vars(self._train_raw, target)
-        print("*************************** columns of the train_df (to check that no embeddings inside) ***************************")
+        print("*************************** columns of the train_df (to check whether embeddings inside) ***************************")
         print(train_df.columns[1:50])
 
         self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)

@@ -391,6 +391,7 @@ class DataFrameBuilder:
     
     # ------ speech embeddings (optional) -------
     # only if load_speech_embeddings() was called beforehand.
+    print(f"*************************** embedding chosen {self._embedding_name} *************************** ")
     if self._embedding_name is not None:
         self.load_speech_embeddings(name=self._embedding_name)
 
