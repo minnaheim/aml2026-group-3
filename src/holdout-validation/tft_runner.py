@@ -113,9 +113,15 @@ class TFTRunner:
         lag_cols   = [f"{c}_lag_{l}" for c in LAG_VARS for l in LAG_PERIODS
                       if f"{c}_lag_{l}" in train_df.columns]
         
-        # if pca present
+        # if pca present (only when --embedding was passed)
         pca_cols_present = [c for c in self.dfb.pca_cols if c in train_df.columns]
 
+        # fomc timing / dissent cols — only present when speeches are loaded
+        FOMC_KNOWN   = ['days_to_fomc', 'days_since_fomc', 'fomc_cycle_pos', 'meeting_this_month']
+        DISSENT_COLS = ['dissent_rate_mean', 'dissent_net_hawk_mean', 'dissent_net_hawk_sum',
+                        'n_tighter_sum', 'n_easier_sum', 'any_dissent_recent']
+        fomc_known_present   = [c for c in FOMC_KNOWN   if c in train_df.columns]
+        dissent_cols_present = [c for c in DISSENT_COLS if c in train_df.columns]
 
         meta_cat_cols  = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
                           for c in ('meta_units', 'meta_frequency')
@@ -134,14 +140,9 @@ class TFTRunner:
             static_categoricals=['series_id'] + meta_cat_cols,
             static_reals=meta_real_cols,
             time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday',
-                                      # also add the fomc dates here since they are well known in advance
-                                      # there are like very few exceptions, I think 9/11 was one of them
-                                      'days_to_fomc', 'days_since_fomc', 'fomc_cycle_pos', 'meeting_this_month'],
-            # speeches are time varying, so i add them here!
-            time_varying_unknown_reals= [*covariates, *lag_cols, *pca_cols_present,
-                                         # add dissents
-                                         'dissent_rate_mean', 'dissent_net_hawk_mean', 'dissent_net_hawk_sum',    
-                                         'n_tighter_sum', 'n_easier_sum', 'any_dissent_recent'],
+                                      # fomc dates known in advance — only included with speeches
+                                      *fomc_known_present],
+            time_varying_unknown_reals=[*covariates, *lag_cols, *pca_cols_present, *dissent_cols_present],
             target_normalizer=EncoderNormalizer(transformation="softplus"),
             add_relative_time_idx=True,
             add_target_scales=True,
