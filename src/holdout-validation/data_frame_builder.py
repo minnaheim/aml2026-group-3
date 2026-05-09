@@ -13,6 +13,8 @@ class DataFrameBuilder:
   # should accomodate roberta, finbert, kafka, reshuffling, ...
   EMBEDDING_REGISTRY = {
       "fomc-roberta": "data/embeddings/fomc-roberta/embeddings_pca_mean_full_fomc-roberta.csv",
+      "finbert": "data/embeddings/finbert/embeddings_pca_mean_full_finbert.csv" # also allow finbert
+      # add the short and cls versions here too!
   }  
   
   # include district mapping of board and all regional districts
