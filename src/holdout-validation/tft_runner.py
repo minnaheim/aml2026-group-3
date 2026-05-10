@@ -14,6 +14,9 @@ from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 warnings.filterwarnings("ignore")
 
+SEED = 42
+pl.seed_everything(SEED, workers=True)
+
 MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP", "GBP", "YEN", "FFR"]
 LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 LAG_PERIODS = [1, 2, 6, 12]
@@ -30,6 +33,14 @@ class TFTRunner:
     MAX_EPOCHS = 50
     LEARNING_RATE = 0.03
 
+    # search ranges for Optuna tuning
+    TUNE_HIDDEN_SIZE_RANGE         = (16, 128)
+    TUNE_HIDDEN_CONTINUOUS_RANGE   = (8, 64)
+    TUNE_ATTENTION_HEAD_RANGE      = (1, 4)
+    TUNE_DROPOUT_RANGE             = (0.1, 0.4)
+    TUNE_LEARNING_RATE_RANGE       = (1e-4, 0.1)
+    TUNE_GRADIENT_CLIP_RANGE       = (0.01, 1.0)
+
     def __init__(self, dfb):
         """
         Parameters
@@ -41,6 +52,60 @@ class TFTRunner:
             operates in macro-only mode.
         """
         self.dfb = dfb
+        self._best_params: dict = {}  # populated by tune_hyperparams()
+
+    def tune_hyperparams(
+        self,
+        train_dl,
+        val_dl,
+        n_trials: int = 20,
+        device: str = 'cpu',
+    ) -> dict:
+        """Run Optuna via pytorch-forecasting's built-in optimizer.
+
+        Searches over: learning_rate, hidden_size, hidden_continuous_size,
+        attention_head_size, dropout, gradient_clip_val.
+        Results are stored in self._best_params and returned.
+
+        Parameters
+        ----------
+        n_trials : int
+            Number of Optuna trials (each is a full training run with early stopping).
+            20–30 is reasonable; 50+ for a more thorough search.
+        """
+        from pytorch_forecasting.models.temporal_fusion_transformer.tuning import (
+            optimize_hyperparameters,
+        )
+
+        import optuna
+        accelerator = device if device in ('cuda', 'mps') else 'cpu'
+        _study = optuna.create_study(
+            direction="minimize",
+            sampler=optuna.samplers.TPESampler(seed=SEED),
+        )
+        study = optimize_hyperparameters(
+            train_dl,
+            val_dl,
+            model_path="optuna_tft",
+            n_trials=n_trials,
+            study=_study,
+            max_epochs=self.MAX_EPOCHS,
+            gradient_clip_val_range=self.TUNE_GRADIENT_CLIP_RANGE,
+            hidden_size_range=self.TUNE_HIDDEN_SIZE_RANGE,
+            hidden_continuous_size_range=self.TUNE_HIDDEN_CONTINUOUS_RANGE,
+            attention_head_size_range=self.TUNE_ATTENTION_HEAD_RANGE,
+            dropout_range=self.TUNE_DROPOUT_RANGE,
+            learning_rate_range=self.TUNE_LEARNING_RATE_RANGE,
+            use_learning_rate_finder=False,  # range above handles LR search
+            trainer_kwargs=dict(
+                accelerator=accelerator,
+                devices=1,
+                limit_train_batches=30,  # speed up each trial
+            ),
+        )
+        self._best_params = study.best_params
+        print(f"[Optuna] best trial #{study.best_trial.number}: {self._best_params}")
+        return self._best_params
 
     def _add_tft_vars(self, df: pd.DataFrame, target: str) -> pd.DataFrame:
         """Add series_id, time_idx, calendar features, monthly lags, and target metadata."""
@@ -180,25 +245,26 @@ class TFTRunner:
             logger = WandbLogger(project='tft', name='tft-holdout')
 
         accelerator = device if device in ('cuda', 'mps') else 'cpu'
+        # use Optuna best params if tune_hyperparams() was called, else fall back to defaults
+        p = self._best_params
         trainer = pl.Trainer(
             max_epochs=self.MAX_EPOCHS,
             accelerator=accelerator,
             devices=1,
-            gradient_clip_val=0.25,
+            gradient_clip_val=p.get('gradient_clip_val', 0.25),
             # limit_train_batches=60,
             callbacks=callbacks,
             enable_model_summary=True,
             logger=logger,
         )
-
         tft = TemporalFusionTransformer.from_dataset(
             training_ds,
-            learning_rate=self.LEARNING_RATE,
-            lstm_layers=4, # before was 2
-            hidden_size=64, # before this was 16
-            attention_head_size=2,
-            dropout=0.2,
-            hidden_continuous_size=8,
+            learning_rate=p.get('learning_rate', self.LEARNING_RATE),
+            lstm_layers=4,
+            hidden_size=p.get('hidden_size', 64),
+            attention_head_size=p.get('attention_head_size', 2),
+            dropout=p.get('dropout', 0.2),
+            hidden_continuous_size=p.get('hidden_continuous_size', 8),
             output_size=1,
             loss=SMAPE(),
             log_interval=10,
@@ -210,16 +276,24 @@ class TFTRunner:
         return trainer.checkpoint_callback.best_model_path
 
     def run(self, splits, target: str, fold: int = 0, batch_size: int = 128,
-            use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu') -> str:
-        """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
+            use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu',
+            tune: bool = False, n_trials: int = 20) -> str:
+        """Full pipeline: augment → dataset → train. Returns best checkpoint path.
+
+        Parameters
+        ----------
+        tune : bool
+            If True, run Optuna hyperparameter search before final training.
+        n_trials : int
+            Number of Optuna trials (ignored when tune=False).
+        """
         self._train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
-        print("Got data from data_frame_builder...")
         train_df = self._add_tft_vars(self._train_raw, target)
-        print("*************************** columns of the train_df (to check that no embeddings inside) ***************************")
-        print(train_df.columns[1:50])
 
         self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
-        print("Created TimeSeriesDataSet for tft...")
+        if tune:
+            print(f"[Optuna] Starting hyperparameter search ({n_trials} trials)...")
+            self.tune_hyperparams(train_dl, val_dl, n_trials=n_trials, device=device)
         return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,

@@ -16,7 +16,6 @@ matplotlib.use("Agg")  # headless-safe; no display required
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import wandb
 import os
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -35,6 +34,7 @@ def _setup_wandb() -> None:
     """Log in to W&B.
      with the session secret, in renku, else you input it yourself
     """
+    import wandb  # lazy import — only needed when --wandb is passed
     if not os.environ.get("WANDB_API_KEY"):
         if _RENKU_WANDB_SECRET.exists():
             os.environ["WANDB_API_KEY"] = _RENKU_WANDB_SECRET.read_text().strip()
@@ -58,7 +58,6 @@ def compute_metrics(df: pd.DataFrame) -> dict:
 
 # ── save ─────────────────────────────────────────────────────────────────────
 
-# TODO: change here to sort by target
 def save_results(results: dict, out_dir: Path) -> pd.DataFrame:
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -138,8 +137,25 @@ def main():
         help="Compute device for TFT (default: cpu)",
     )
     parser.add_argument(
-        "--embedding", default="fomc-roberta", choices=["fomc-roberta"],
-        help="Speech embedding to include (default: none — macro-only mode)",
+        "--embedding", default="fomc-roberta",
+        choices=[
+            "fomc-roberta",
+            "fomc-roberta-cls",
+            "fomc-roberta-mean-512",
+            "fomc-roberta-cls-512",
+            "fomc-roberta-shuffled",      # placebo: randomised speech order
+            "fomc-roberta-cls-shuffled",  # placebo: cls variant
+            "none",                       # macro-only mode (no speeches)
+        ],
+        help="Speech embedding variant to use. 'none' = macro-only mode.",
+    )
+    parser.add_argument(
+        "--tune", action="store_true", default=False,
+        help="Run Optuna hyperparameter search before final TFT training.",
+    )
+    parser.add_argument(
+        "--n-trials", type=int, default=20, dest="n_trials",
+        help="Number of Optuna trials per target (default: 20). Ignored without --tune.",
     )
     args = parser.parse_args()
 
@@ -153,10 +169,13 @@ def main():
     print(f"Device    : {args.device}")
     print(f"Embedding : {args.embedding or 'none'}")
     print(f"W&B       : {args.wandb}")
+    print(f"Tune      : {args.tune} (n_trials={args.n_trials})")
     print(f"Output    : {out_dir}\n")
 
     # ── 1. split the data acc. to data-frame-builder ─────────────────────────
-    dfb = DataFrameBuilder(str(root), embedding=args.embedding)
+    # 'none' disables speech embeddings (macro-only mode)
+    embedding = None if args.embedding == "none" else args.embedding
+    dfb = DataFrameBuilder(str(root), embedding=embedding)
     df  = dfb.process_data()
     splits, holdout = dfb.generate_split(df)
 
@@ -202,6 +221,7 @@ def main():
         ckpt = tft_runner.run(
             splits, target=target, fold=0,
             use_wandb=args.wandb, device=args.device,
+            tune=args.tune, n_trials=args.n_trials,
         )
         print(f"  → best checkpoint: {ckpt}")
 

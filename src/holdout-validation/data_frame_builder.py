@@ -12,7 +12,13 @@ class DataFrameBuilder:
   # define which embeddings exist
   # should accomodate roberta, finbert, kafka, reshuffling, ...
   EMBEDDING_REGISTRY = {
-      "fomc-roberta": "data/embeddings/fomc-roberta/embeddings_pca_mean_full_fomc-roberta.csv",
+      "fomc-roberta":             "data/embeddings/fomc-roberta/embeddings_pca_mean_full_fomc-roberta.csv",
+      "fomc-roberta-cls":         "data/embeddings/fomc-roberta/embeddings_pca_cls_full_fomc-roberta.csv",
+      "fomc-roberta-mean-512":    "data/embeddings/fomc-roberta/embeddings_pca_mean_512_fomc-roberta.csv",
+      "fomc-roberta-cls-512":     "data/embeddings/fomc-roberta/embeddings_pca_cls_512_fomc-roberta.csv",
+      # shuffled (randomised) variants for the placebo test
+      "fomc-roberta-shuffled":     "data/embeddings/fomc-roberta/shuffled/embeddings_pca_mean_full_fomc-roberta_shuffled.csv",
+      "fomc-roberta-cls-shuffled": "data/embeddings/fomc-roberta/shuffled/embeddings_pca_cls_full_fomc-roberta_shuffled.csv",
   }  
   
   # include district mapping of board and all regional districts
