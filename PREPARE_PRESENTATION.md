@@ -41,6 +41,9 @@ For the speech embeddings, we have decided to use three models, two of which we 
 
 We have decided to pursue two embedding strategies so far.
 
+Please note, that although these 3 embeddings exist, only the FOMC-RoBERTa is used for the `holdout-validation` pipeline atm. The reason for this, is because currently only the FOMC-RoBERTa embeddings exist in full (without being PCA'd) and the others have been PCA'd already. So even if we split the embeddings to only include the training data, there is data leakage anyhow (similar to David's example in the lecture, with the normalising of data pre-split). 
+
+
 ### Truncation
 Assumption: The highest informational value is right at the beginning of a speech. 
 
@@ -86,6 +89,7 @@ To expand on the simple AR(1) benchmark, we also fit an ARIMA to the macroeconom
 The prediction method is identical to the AR(1) process.
 
 # TFT
+
 
 # Forecasts
 Bringing it all together

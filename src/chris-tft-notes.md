@@ -57,9 +57,7 @@
 - kafka embeddings 
 - check if gdp predicts 12 months or 4 years
 - add prepare-presentation
-- merge anna's changes here 
 - try with different macro aggregation methods
-- 
 
 #### anna's todo:
 - finish anna/tft
@@ -74,3 +72,22 @@
 - compare hyperparams
 - hidden size smaller 
 - more attention heads (4vs2) 
+
+
+#### notes on embeddings!
+
+- in the data/embeddings we have both finbert and fomc-roberta embeddings
+- but currently we can only use fomc-roberta, because here we have the pre-PCA version
+- we need the pre-PCA version because we need to split the data into train,validation, etc. first, before we calculate the PCA (else we have data leakage)
+- thus, we use `fomc-roberta/embeddings_full_*_full_fomc-roberta.csv.zip` to create a new class, which has the following methods:
+    - `generate_split` (based on pre-defined split by data-frame-builder)
+    - `re-calculate_PCA` on each train, test (to feed into tft)
+    - `shuffle_embeddings` which shuffles within train, test (separately) to see how much chronological embeddings matter (but isnt this also data leakage?)
+    - `get_embedding_data` we call this in data-frame-builder to get the data, dep. on if user passes --embedding or not.
+
+
+<!-- #### notes for claude 
+please build a new class into the holdout-validation which works a data-leakage free inclusion of the embeddings into the models. 
+
+please make absolute sure, that there is no leakage present. for this work, you can use the embeddings_pipeline.py as an example, but make sure to not include the finbert and olama, just the fomc-roberta atm (this is the only embedding where we have the full embeddings, not PCAd yet.) also only do the embed_full atm, not the embed_512. 
+ -->

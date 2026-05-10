@@ -20,9 +20,10 @@ import wandb
 import os
 
 sys.path.insert(0, str(Path(__file__).parent))
-from data_frame_builder import DataFrameBuilder
+from data_frame_builder  import DataFrameBuilder
 from benchmark_runner    import ARRunner, ARIMARunner
 from tft_runner          import TFTRunner
+from embedding_manager   import EmbeddingManager
 
 MAIN_TARGETS = ["CPI", "UNRATE", "GDP"]
 ALL_TARGETS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
@@ -138,7 +139,7 @@ def main():
         help="Compute device for TFT (default: cpu)",
     )
     parser.add_argument(
-        "--embedding", default=None, choices=["fomc-roberta", "finbert"], # added finbert here
+        "--embedding", default=None, choices=["fomc-roberta"],
         help="Speech embedding to include (default: none — macro-only mode)",
     )
     args = parser.parse_args()
@@ -156,9 +157,17 @@ def main():
     print(f"Output    : {out_dir}\n")
 
     # ── 1. split the data acc. to data-frame-builder ─────────────────────────
-    dfb = DataFrameBuilder(str(root), embedding=args.embedding)
+    # dissents are loaded explicitly so those features appear in process_data()
+    # regardless of whether embeddings are used
+    dfb = DataFrameBuilder(str(root))
+    dfb.load_fomc_dissent()
     df  = dfb.process_data()
     splits, holdout = dfb.generate_split(df)
+
+    if args.embedding == "fomc-roberta":
+        # re-fit PCA per fold on training speeches only — no look-ahead leakage
+        emb = EmbeddingManager(str(root)).load()
+        splits = dfb.add_leakage_free_embeddings(splits, emb)
 
     for s in splits:
         tr, te = s["train"], s["test"]

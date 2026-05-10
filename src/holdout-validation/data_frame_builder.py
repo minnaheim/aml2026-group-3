@@ -9,14 +9,6 @@ SPEECH_WINDOW_MONTHS = 12
 
 class DataFrameBuilder:
 
-  # define which embeddings exist
-  # should accomodate roberta, finbert, kafka, reshuffling, ...
-  EMBEDDING_REGISTRY = {
-      "fomc-roberta": "data/embeddings/fomc-roberta/embeddings_pca_mean_full_fomc-roberta.csv",
-      "finbert": "data/embeddings/finbert/embeddings_pca_mean_full_finbert.csv" # also allow finbert
-      # add the short and cls versions here too!
-  }  
-  
   # include district mapping of board and all regional districts
   # note: Board and NY always vote, others are in voting groups
   # available at: https://www.stlouisfed.org/open-vault/2022/nov/fomc-voting-rotation-explained
@@ -30,7 +22,7 @@ class DataFrameBuilder:
         "Federal Reserve Bank of Dallas": "DAL", "Federal Reserve Bank of San Francisco": "SF"
     }  
 
-  def __init__(self, path: str | None = None, embedding: str | None = None):
+  def __init__(self, path: str | None = None):
     if path is None:
       self.path = os.getcwd()
     else:
@@ -42,12 +34,11 @@ class DataFrameBuilder:
     self.TARGET_COLS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
     self.QUARTERLY_TARGETS = {"GDP"} # quarterly frequency
     self.MONTHLY_TARGETS   = {"CPI", "PAYEMS", "INDPRO", "UNRATE"}
-    
+
     # add fomc dissents
     self.dissent_df: pd.DataFrame | None = None
-    
-    # populated by load_speech_embeddings(); None means speeches not loaded.
-    self._embedding_name = embedding
+
+    # populated by add_leakage_free_embeddings(); None means speeches not loaded.
     self.speeches_df: pd.DataFrame | None = None
     self.pca_cols: list[str] = []
 
@@ -192,68 +183,8 @@ class DataFrameBuilder:
 
     return df
   
-  
-  # load speech embeddings based on chris's logic
-  def load_speech_embeddings(
-        self,
-        embedding_subpath: str | None = None,
-        name: str | None = None,
-    ) -> "DataFrameBuilder":
-        """Load FOMC speech PCA embeddings and cache them on the instance.
- 
-        Must be called before process_data() if goal to merge speech features
-        into the main DataFrame. Returns self so it can be chained:
- 
-            dfb = DataFrameBuilder(path).load_speech_embeddings()
-            df  = dfb.process_data()
- 
-        The loaded data is stored as:
-            self.speeches_df  — full embedding DataFrame sorted by Date
-            self.pca_cols     — sorted list of "pca_N" column names
- 
-        Parameters
-        ----------
-        embedding_subpath :
-            Path to the PCA CSV relative to self.path.
-        """
-        if name is not None:
-            if name not in self.EMBEDDING_REGISTRY:
-                raise ValueError(f"Unknown embedding '{name}'. Choose from: {list(self.EMBEDDING_REGISTRY)}")
-            embedding_subpath = self.EMBEDDING_REGISTRY[name]
-        elif embedding_subpath is None:
-            embedding_subpath = self.EMBEDDING_REGISTRY["fomc-roberta"]
-        
-        speech_path = Path(self.path) / embedding_subpath
-        if not speech_path.exists():
-            raise FileNotFoundError(
-                f"Speech embedding file not found: {speech_path}\n"
-                "Check the path or omit load_speech_embeddings() for macro-only mode."
-            )
-        df = pd.read_csv(speech_path, parse_dates=["Date"])
-        df = df.sort_values("Date").reset_index(drop=True)
-        
-        # simplify using district mapping
-        # fixed typo here :)
-        if 'CentralBank' in df.columns:
-            df['District'] = df['CentralBank'].map(self.DISTRICT_MAPPING)
-        
-        # apply the voting logic to every speech
-        df['is_voter'] = df.apply(self._is_voter, axis=1)
-        
-        self.speeches_df = df
-        self.pca_cols    = sorted(c for c in df.columns if c.startswith("pca_"))
-        print(
-            f"[speeches] Loaded {len(df)} speeches "
-            f"with {len(self.pca_cols)} PCA dims "
-            f"({df['Date'].min().date()} → {df['Date'].max().date()})"
-        )
-        
-        # when loading speeches, also always load dissents
-        self.load_fomc_dissent()
-        
-        return self
-      
-      
+
+
   def _aggregate_speeches_for_month(self, quarter_start: pd.Timestamp) -> dict[str, float]:
       """Mean PCA vector for speeches in the rolling window before *month_start*.
 
@@ -389,16 +320,8 @@ class DataFrameBuilder:
     # forward-fill quarterly vars (GDP)
     df[self.TARGET_COLS] = df[self.TARGET_COLS].ffill()
     
-    # ------ speech embeddings (optional) -------
-    # only if load_speech_embeddings() was called beforehand.
-    print(f"*************************** embedding chosen {self._embedding_name} *************************** ")
-    if self._embedding_name is not None:
-        self.load_speech_embeddings(name=self._embedding_name)
-
-    if self.speeches_df is not None:  # catches both paths
-        df = self._add_speech_features(df)
-        
     # add the fomc date and dissent info
+    # speech features are added per-fold by add_leakage_free_embeddings()
     if self.dissent_df is not None:
         df = self._add_dissent_features(df)
         df = self._add_fomc_timing_features(df)
@@ -431,6 +354,51 @@ class DataFrameBuilder:
     return splits, df_holdout
 
 
+
+  def add_leakage_free_embeddings(
+        self,
+        splits:   list[dict],
+        emb_mgr,            # EmbeddingManager instance (imported lazily to avoid circular dep)
+        shuffled: bool = False,
+    ) -> list[dict]:
+        """Add leakage-free PCA speech features to each fold's train/test DataFrames.
+
+        PCA is fitted on each fold's training speeches only — no look-ahead bias.
+        Use this instead of loading pre-computed PCA embeddings for fomc-roberta.
+
+        The method calls emb_mgr.generate_split() internally, then for each fold
+        gets leakage-free speech embeddings, applies district mapping and voter logic,
+        and runs _add_speech_features() on train and test separately.
+
+        After this call, dfb.pca_cols contains the aggregated column names
+        (pca_N_mean, pca_N_std, voter_speech_ratio) that TFTRunner expects.
+
+        Parameters
+        ----------
+        splits   : as returned by generate_split()
+        emb_mgr  : a loaded EmbeddingManager instance
+        shuffled : if True, permute embeddings within splits (chronology ablation)
+        """
+        emb_mgr.generate_split(splits)
+        for i, s in enumerate(splits):
+            # get leakage-free speeches for this fold (0-based index into emb_mgr._splits)
+            speeches_df = emb_mgr.get_embedding_data(fold=i, shuffled=shuffled)
+
+            # district mapping and voter logic (same enrichment as load_speech_embeddings)
+            if "CentralBank" in speeches_df.columns:
+                speeches_df["District"] = speeches_df["CentralBank"].map(self.DISTRICT_MAPPING)
+            speeches_df["is_voter"] = speeches_df.apply(self._is_voter, axis=1)
+
+            self.speeches_df = speeches_df
+            self.pca_cols    = [c for c in speeches_df.columns if c.startswith("pca_")]
+
+            # add speech features to train and test using fold-specific PCA
+            # _add_speech_features uses only speeches BEFORE each month — no look-ahead
+            s["train"] = self._add_speech_features(s["train"].copy())
+            s["test"]  = self._add_speech_features(s["test"].copy())
+            # _add_speech_features updates self.pca_cols to aggregated names (pca_N_mean, etc.)
+
+        return splits
 
   def get_data(self, splits, train: bool= True,  model: str = "TFT", target: str = "CPI", fold = 0):
     """
