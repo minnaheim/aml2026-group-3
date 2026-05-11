@@ -390,13 +390,17 @@ class DataFrameBuilder:
             speeches_df["is_voter"] = speeches_df.apply(self._is_voter, axis=1)
 
             self.speeches_df = speeches_df
-            self.pca_cols    = [c for c in speeches_df.columns if c.startswith("pca_")]
+            # raw column names from speeches_df (pca_0, pca_1, ...)
+            raw_pca_cols = [c for c in speeches_df.columns if c.startswith("pca_")]
+            self.pca_cols = raw_pca_cols
 
-            # add speech features to train and test using fold-specific PCA
-            # _add_speech_features uses only speeches BEFORE each month — no look-ahead
+            # _add_speech_features overwrites self.pca_cols with aggregated names
+            # (pca_0_mean, pca_0_std, …); restore raw names before the test call
+            # so _aggregate_speeches_for_month can still look them up in speeches_df
             s["train"] = self._add_speech_features(s["train"].copy())
+            self.pca_cols = raw_pca_cols  # restore before test call
             s["test"]  = self._add_speech_features(s["test"].copy())
-            # _add_speech_features updates self.pca_cols to aggregated names (pca_N_mean, etc.)
+            # after test call self.pca_cols holds aggregated names — correct for TFTRunner
 
         return splits
 
