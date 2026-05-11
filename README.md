@@ -44,5 +44,5 @@ python src/holdout-validation/main.py --target CPI --wandb --device cuda
 
 With FOMC speech embeddings:
 ```bash
-python src/holdout-validation/main.py --embeddings fomc-roberta --wandb --device cuda
+python src/holdout-validation/main.py --embedding fomc-roberta --wandb --device cuda
 ```
