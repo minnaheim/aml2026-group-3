@@ -135,7 +135,7 @@ def main():
         help="Enable Weights & Biases logging for TFT training",
     )
     parser.add_argument(
-        "--device", default="cuda", choices=["cpu", "mps", "cuda"],
+        "--device", default="cpu", choices=["cpu", "mps", "cuda"],
         help="Compute device for TFT (default: cpu)",
     )
     parser.add_argument(
@@ -143,6 +143,10 @@ def main():
         help="Speech embedding to include (default: none — macro-only mode)",
     )
     args = parser.parse_args()
+
+    # make sure that there is no sneaky cuda being used 
+    if args.device != "cuda":                                                                                                                                            
+          os.environ["CUDA_VISIBLE_DEVICES"] = ""   
 
     root    = Path(__file__).parent.parent.parent
     out_dir = root / "out" / "holdout"

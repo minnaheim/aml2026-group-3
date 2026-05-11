@@ -39,7 +39,7 @@ python src/holdout-validation/main.py --wandb --device cuda
 
 Single target:
 ```bash
-python src/holdout-validation/main.py --target CPI --wandb --device cuda
+python src/holdout-validation/main.py --wandb --device cpu
 ```
 
 With FOMC speech embeddings:
