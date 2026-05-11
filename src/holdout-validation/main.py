@@ -218,6 +218,11 @@ def main():
         )
         print(f"  → best checkpoint: {ckpt}")
 
+        # plot the vars that contribute most
+        print("\n[TFT – interpretation]")
+        interpretation = tft_runner.interpret_output()
+
+
         print("\n[TFT – inference]")
         tft_df = tft_runner.predict(
             ckpt, splits, target=target, fold=0, device=args.device,

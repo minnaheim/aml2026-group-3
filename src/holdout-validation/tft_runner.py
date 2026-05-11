@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import lightning.pytorch as pl
 
-
+import matplotlib as plt
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import EncoderNormalizer # switched from group normalizer
 from pytorch_forecasting.metrics import SMAPE
@@ -208,7 +208,63 @@ class TFTRunner:
         print(f"[TFT] parameters: {tft.size()/1e3:.1f}k")
 
         trainer.fit(tft, train_dataloaders=train_dl, val_dataloaders=val_dl)
-        return trainer.checkpoint_callback.best_model_path
+        ckpt = self.train_tft(training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
+
+        # store for interpret_output
+        self._last_ckpt = ckpt
+        self._last_training_ds = training_ds
+        self._last_val_dl = val_dl
+        self._last_device = device
+        return ckpt
+
+    def interpret_output(self, out_dir: Path | None = None) -> dict:
+        """Variable importance + attention from the last trained model.
+
+        Prints encoder/decoder/static importance tables.
+        If out_dir is given, saves plot_interpretation figures there.
+        """
+        from pytorch_forecasting import TemporalFusionTransformer as TFT
+
+        map_loc = self._last_device if self._last_device in ("cuda", "mps") else "cpu"
+        model = TFT.load_from_checkpoint(self._last_ckpt, map_location=map_loc)
+        model.eval()
+
+        raw_preds, _ = model.predict(self._last_val_dl, mode="raw", return_x=True)
+        interpretation = model.interpret_output(raw_preds, reduction="mean")
+
+        # variable name lists in the same order as the variable-selection networks
+        ds = self._last_training_ds
+        name_map = {
+            "static_variables":  ds.static_reals + ds.static_categoricals,
+            "encoder_variables": (ds.time_varying_unknown_reals
+                                  + ds.time_varying_unknown_categoricals
+                                  + ds.time_varying_known_reals
+                                  + ds.time_varying_known_categoricals),
+            "decoder_variables": (ds.time_varying_known_reals
+                                  + ds.time_varying_known_categoricals),
+        }
+        for key, names in name_map.items():
+            if key not in interpretation:
+                continue
+            vals = interpretation[key].cpu().numpy()
+            n = min(len(names), len(vals))
+            imp = (
+                pd.DataFrame({"variable": names[:n], "importance": vals[:n]})
+                .sort_values("importance", ascending=False)
+            )
+            print(f"\n  {key.replace('_', ' ')}:")
+            print(imp.to_string(index=False))
+
+        if out_dir is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            figs = model.plot_interpretation(interpretation)
+            for name, fig in figs.items():
+                path = out_dir / f"tft_interpretation_{name}.png"
+                fig.savefig(path, bbox_inches="tight", dpi=150)
+                plt.close(fig)
+                print(f"  Saved: {path}")
+
+        return interpretation
 
     def run(self, splits, target: str, fold: int = 0, batch_size: int = 128,
             use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu') -> str:
