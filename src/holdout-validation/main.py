@@ -25,7 +25,7 @@ from benchmark_runner    import ARRunner, ARIMARunner
 from tft_runner          import TFTRunner
 from embedding_manager   import EmbeddingManager
 
-MAIN_TARGETS = ["CPI", "UNRATE", "GDP"]
+MAIN_TARGETS = ["CPI", "UNRATE", "GDP" ]
 ALL_TARGETS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 
 # --- weights and biases logging ------------------------
@@ -156,6 +156,10 @@ def main():
         "--embedding", default=None, choices=["fomc-roberta"],
         help="Speech embedding to include (default: none — macro-only mode)",
     )
+    parser.add_argument(
+        "--horizon", type=int, default=12, choices=[1, 6, 9, 12],
+        help="Forecast horizon in months (default: 12)",
+    )
     args = parser.parse_args()
 
     # make sure that there is no sneaky cuda being used 
@@ -171,6 +175,7 @@ def main():
     print(f"Targets   : {args.targets}")
     print(f"Device    : {args.device}")
     print(f"Embedding : {args.embedding or 'none'}")
+    print(f"Horizon   : {args.horizon}")
     print(f"W&B       : {args.wandb}")
     print(f"Output    : {out_dir}\n")
 
@@ -218,15 +223,15 @@ def main():
             print(f" Fold {fold_num} | Target: {target}")
             print(f"{'─' * 55}")
 
-            print("\n[AR(1)]")
-            ar_runner.run(splits, target=target, fold=fold_idx)
-            ar_df = ar_runner.predict(splits, target=target, fold=fold_idx)
+            print("\n[AR]")
+            ar_order, ar_seasonal = ar_runner.run(splits, target=target, fold=fold_idx)
+            ar_df = ar_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
             results["AR"][fold_num][target] = ar_df
-            print(f"  → {len(ar_df)} predictions")
+            print(f"  → {len(ar_df)} predictions (order={ar_order}, seasonal={ar_seasonal})")
 
             print("\n[ARIMA]")
             arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=fold_idx)
-            arima_df = arima_runner.predict(splits, target=target, fold=fold_idx)
+            arima_df = arima_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
             results["ARIMA"][fold_num][target] = arima_df
             print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
@@ -237,13 +242,14 @@ def main():
             )
             print(f"  → best checkpoint: {ckpt}")
 
-            print("\n[TFT – interpretation]")
-            interpretation = tft_runner.interpret_output()
-            print(f"interpretation: {interpretation}")
+            # print("\n[TFT – interpretation]")
+            # interpretation = tft_runner.interpret_output()
+            # print(f"interpretation: {interpretation}")
 
             print("\n[TFT – inference]")
             tft_df = tft_runner.predict(
                 ckpt, splits, target=target, fold=fold_idx, device=args.device,
+                step=args.horizon, # includes horizon
             )
             results["TFT"][fold_num][target] = tft_df
             print(f"  → {len(tft_df)} predictions")

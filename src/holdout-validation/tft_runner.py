@@ -277,7 +277,7 @@ class TFTRunner:
         return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
-                batch_size: int = 128, device: str = 'cpu') -> pd.DataFrame:
+                batch_size: int = 128, device: str = 'cpu', step: int | None = None) -> pd.DataFrame:
         """Rolling-window inference over the test split.
 
         The test period is typically much longer than MAX_PREDICTION_LENGTH, so
@@ -303,8 +303,8 @@ class TFTRunner:
         # get validation data (not test. misnomer), test not used in cv
         test_raw = self.dfb.get_data(splits, train=False, model='TFT', fold=fold)
 
-        test_len = len(test_raw)
-        step     = self.MAX_PREDICTION_LENGTH
+        test_len  = len(test_raw)
+        step      = step if step is not None else self.MAX_PREDICTION_LENGTH
         all_rows: list[dict] = []
         accumulated_preds: dict = {}  # date -> prediction in original scale (no pollution)
 
@@ -335,9 +335,9 @@ class TFTRunner:
                 raw_preds = raw_preds.squeeze(1)
             preds_np = raw_preds.detach().cpu().numpy()
 
-            # for a partial last window the target days sit at the tail of the
-            # 360-step output (offset = step - window_size)
-            pred_offset = step - window_size
+            # model always outputs MAX_PREDICTION_LENGTH steps with predict=True;
+            # for a partial last window the target days sit at the tail of that output
+            pred_offset = self.MAX_PREDICTION_LENGTH - window_size
 
             for i in range(window_size):
                 row  = test_window.iloc[i]

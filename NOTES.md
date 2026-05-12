@@ -13,19 +13,41 @@
 - [ ] Normalize PCA: probably necessary! if it were to dramatically decrease performance, ask David
       
 ### TFT
-- [ ] Additional metadata from FRED
+- [x] Additional metadata from FRED
 - [ ] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
 
 ### BENCHMARKS
 - [x] Get AR(p) process running
 
 ### EVAL METRICS
-- [ ] For AR / ARIMA: expanding / rolling window
-- [ ] For TFT: one-holdout
+- [x] For AR / ARIMA: expanding / rolling window
+- [x] For TFT: one-holdout
+- [x] unified metrics for all
 
 
 ### CV PIPELINE
-- [ ] Get up and running!! (WIP)
+- [x] Get up and running!! (WIP)
+
+# Notes from Meeting on Tue, 12.5 (individual todos)
+
+## minna:
+- [x] multiple folds
+- [ ] hyperparam tuning (with nested cv) -> chris
+- [ ] why are the predictions always linear? look at AR weight matrices
+
+
+## chris
+- [ ] 512 and full embeddings 
+- [ ] kafka embeddings 
+- [ ] adds what he did on hyperparam tuning
+
+
+## anna
+- [ ] trying no dim. reduction, diff. reduction, pca-with differeing, factor analysis 
+- [ ] ar process adjustment 
+- [ ] alignment via attention 
+- [ ] use the growth rates instead of level
+
 
 ## Decisions
 ### Data Sources

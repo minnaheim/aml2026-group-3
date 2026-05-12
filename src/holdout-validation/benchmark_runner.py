@@ -16,8 +16,20 @@ LOG_DIFF_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"} # log, then diff?
 # AR Runner
 # ---------------------------------------------------------------------------
 class ARRunner:
-    def __init__(self, dfb):
+    def __init__(self, dfb, cache_dir: Path | None = None):
         self.dfb = dfb
+        self._cache_dir = cache_dir or (Path(dfb.path) / "out" / "cv" / "ar_orders")
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _cache_path(self, key: str) -> Path:
+        return self._cache_dir / f"{key}.json"
+
+    def _load_orders(self, key: str) -> dict:
+        p = self._cache_path(key)
+        return json.load(open(p)) if p.exists() else {}
+
+    def _save_orders(self, key: str, orders: dict) -> None:
+        json.dump(orders, open(self._cache_path(key), "w"), indent=2)
 
     # only needed internally
     def _transform(self, series: pd.Series, target: str):
@@ -41,38 +53,89 @@ class ARRunner:
         return forecast  # levels: SARIMAX forecast is already in original units
 
 
-    # def _fetch_data(self, splits, target: str = "CPI", fold: int = 0):
-    #     train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
-    #     test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
-    #     return train, test
+    # order selection
+    def _find_order(
+        self,
+        train_series: pd.Series,
+        freq: str,
+        cache_key: str,
+        cached_orders: dict,
+        selection_end,
+    ) -> tuple[tuple, tuple]:
+        if cache_key in cached_orders:
+            entry = cached_orders[cache_key]
+            if entry.get("selection_end") == str(selection_end):
+                return tuple(entry["order"]), tuple(entry["seasonal_order"])
+            else:
+                print(f"Cache stale for {cache_key}, refitting.")
 
+        m = 12 if freq == "MS" else 4
+        try:
+            fit = auto_arima(
+                train_series.dropna(),
+                d=0, D=0, 
+                # max AR(p=3)
+                start_p=0, max_p=3, start_q=0, max_q=0,
+                start_P=0, max_P=0, start_Q=0, max_Q=0, # no seasonal order fit
+                m=m,
+                seasonal=True,
+                information_criterion="aic",
+                error_action="ignore",
+                suppress_warnings=True,
+                stepwise=True,
+            )
+            order, seasonal_order = fit.order, fit.seasonal_order
+        except Exception as exc:
+            print(f"auto_arima failed for {cache_key}: {exc}. Falling back to (1,0,0).")
+            order, seasonal_order = (1, 0, 0), (0, 0, 0, 0)
 
-    def run(self, splits, target: str = "CPI", fold: int = 0):
+        cached_orders[cache_key] = {
+            "order": list(order),
+            "seasonal_order": list(seasonal_order),
+            "selection_end": str(selection_end),
+        }
+        return order, seasonal_order
+
+    # main run
+    def run(self, splits, target: str = "CPI", fold: int = 0) -> tuple:
         train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
 
-        series     = train.set_index("date")[target]
-        freq       = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
-
-        # TODO: is it a problem that we transform both separately??
-        # transform both to stationarity if needed
+        freq   = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
+        series = train.set_index("date")[target]
         stationary, transform = self._transform(series, target)
 
-        print(f"[AR | {target}] transform={transform}, n_train={len(stationary)}")
+        # use end of training data as selection window for order search
+        selection_end = series.index.max()
+        min_required  = 24 if freq == "MS" else 8
+        cached_orders = self._load_orders("global")
+        cache_key     = f"{target}_{freq}_fold{fold}"  # fold-specific to avoid cross-fold pollution
 
-        # fixed AR(1) — same spec as AR-benchmark.py: SARIMAX(1,0,0)
+        if len(stationary.dropna()) >= min_required:
+            order, seasonal_order = self._find_order(
+                stationary, freq, cache_key, cached_orders, selection_end
+            )
+        else:
+            print(f"Insufficient data for {target}, falling back to (1,0,0).")
+            order, seasonal_order = (1, 0, 0), (0, 0, 0, 0)
+
+        self._save_orders("global", cached_orders)
+
         model = SARIMAX(
             stationary.asfreq(freq),
-            # no choice here...
-            order=(1, 0, 0),
-            seasonal_order=(0, 0, 0, 0),
+            order=order,
+            seasonal_order=seasonal_order,
             enforce_stationarity=False,
             enforce_invertibility=False,
         )
-        self._fit            = model.fit(maxiter=1000, disp=False)
+        self._fit            = model.fit(maxiter=250, disp=False)
         self._last_train_val = series.iloc[-1]
         self._transform_type = transform
-        return self._fit
 
+        print(f"[AR | {target}] order={order}, seasonal={seasonal_order}, "
+              f"transform={transform}, n_train={len(stationary)}")
+
+        return order, seasonal_order
+    
         # step = 12 because MAX_ENCODER_LENGTH
     def predict(self, splits, target: str = "CPI", fold: int = 0, step: int = 12) -> pd.DataFrame:
         train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
@@ -205,7 +268,7 @@ class ARIMARunner:
         selection_end = series.index.max()
         min_required  = 24 if freq == "MS" else 8
         cached_orders = self._load_orders("global")
-        cache_key     = f"{target}_{freq}"
+        cache_key     = f"{target}_{freq}_fold{fold}"  # fold-specific to avoid cross-fold pollution
 
         if len(stationary.dropna()) >= min_required:
             order, seasonal_order = self._find_order(
