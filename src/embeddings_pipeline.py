@@ -121,6 +121,21 @@ def _parse_args() -> argparse.Namespace:
         help="Skip PCA entirely — save only the full high-dim embeddings. "
              "Useful when PCA will be refit later inside the CV pipeline.",
     )
+    p.add_argument(
+        "--speech-file",
+        default=None,
+        metavar="PATH",
+        help="Override the default speech CSV/ZIP file. "
+             "Must have the same schema as speeches_with_metadata.csv.zip. "
+             "Useful for placebo experiments (e.g. Kafka text).",
+    )
+    p.add_argument(
+        "--tag",
+        default=None,
+        metavar="LABEL",
+        help="Suffix appended to the output folder name, e.g. 'kafka' → "
+             "data/embeddings/fomc-roberta-kafka/. Prevents overwriting real embeddings.",
+    )
     return p.parse_args()
 
 
@@ -152,27 +167,37 @@ def _load_csv_from_zip(zip_path: Path) -> pd.DataFrame:
             return pd.read_csv(fh, low_memory=False)
 
 
-def load_speeches() -> pd.DataFrame:
-    """Load speeches, preferring the metadata-enriched file."""
-    meta_zip    = data_dir / "speeches_with_metadata.csv.zip"
-    cleaned_zip = data_dir / "cleaned_speeches.csv.zip"
-    cleaned_csv = data_dir / "cleaned_speeches.csv"
-
-    if meta_zip.exists():
-        print(f"Loading {meta_zip.name} …")
-        df = _load_csv_from_zip(meta_zip)
-    elif cleaned_zip.exists():
-        print(f"Loading {cleaned_zip.name} …")
-        df = _load_csv_from_zip(cleaned_zip)
-    elif cleaned_csv.exists():
-        print(f"Loading {cleaned_csv.name} …")
-        df = pd.read_csv(cleaned_csv, low_memory=False)
+def load_speeches(speech_file: str | None = None) -> pd.DataFrame:
+    """Load speeches, preferring the metadata-enriched file.
+    Pass speech_file to override the default path (e.g. for placebo experiments).
+    """
+    if speech_file is not None:
+        path = Path(speech_file)
+        print(f"Loading {path.name} (override) …")
+        if path.suffix == ".zip":
+            df = _load_csv_from_zip(path)
+        else:
+            df = pd.read_csv(path, low_memory=False)
     else:
-        raise FileNotFoundError(
-            "No speech CSV found in data/. Expected one of: "
-            "speeches_with_metadata.csv.zip, cleaned_speeches.csv.zip, "
-            "cleaned_speeches.csv"
-        )
+        meta_zip    = data_dir / "speeches_with_metadata.csv.zip"
+        cleaned_zip = data_dir / "cleaned_speeches.csv.zip"
+        cleaned_csv = data_dir / "cleaned_speeches.csv"
+
+        if meta_zip.exists():
+            print(f"Loading {meta_zip.name} …")
+            df = _load_csv_from_zip(meta_zip)
+        elif cleaned_zip.exists():
+            print(f"Loading {cleaned_zip.name} …")
+            df = _load_csv_from_zip(cleaned_zip)
+        elif cleaned_csv.exists():
+            print(f"Loading {cleaned_csv.name} …")
+            df = pd.read_csv(cleaned_csv, low_memory=False)
+        else:
+            raise FileNotFoundError(
+                "No speech CSV found in data/. Expected one of: "
+                "speeches_with_metadata.csv.zip, cleaned_speeches.csv.zip, "
+                "cleaned_speeches.csv"
+            )
 
     # Prefer text-cleaned; fall back to text
     if "text-cleaned" in df.columns:
@@ -188,8 +213,9 @@ def load_speeches() -> pd.DataFrame:
 # Output path helpers
 #---------------------------------------------------------------------------
 
-def _output_dir(model_name: str) -> Path:
-    d = data_dir / "embeddings" / model_name
+def _output_dir(model_name: str, tag: str | None = None) -> Path:
+    folder = model_name if tag is None else f"{model_name}-{tag}"
+    d = data_dir / "embeddings" / folder
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -517,15 +543,15 @@ def main() -> None:
     model.eval()
     print(f"  Device: {device}  |  Hidden size: {hidden_size}")
 
-    # load speeches
-    df = load_speeches()
+    # load speeches (override path for placebo experiments)
+    df = load_speeches(args.speech_file)
     if args.sample:
         df = df.head(args.sample)
         print(f"  Using sample of {args.sample} speeches.")
     df = df.sort_values("Date").reset_index(drop=True)
     available_meta = [c for c in META_COLS if c in df.columns]
 
-    out_dir = _output_dir(args.model)
+    out_dir = _output_dir(args.model, args.tag)
     print(f"  Output dir: {out_dir}")
 
     if args.truncation == "512":
