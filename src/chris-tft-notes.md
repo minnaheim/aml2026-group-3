@@ -28,12 +28,12 @@
 # Individual To Do's 
 
 ## minna:
-- check if you take the log of all vars? maybe try both?
+- check transfirmation: if you take the log of all vars? maybe try both?
 - adapt the `data_frame_builder` with the new embeddings timeline: 1986-2023 (so holdout 6 months, then train & validation)
-- shorten to only include macro data as of 2023 
 - (check if gdp predicts 12 months or 4 years)
 - multiple folds
-- hyperparam tuning (with nested cv)
+- hyperparam tuning (with nested cv) -> chris
+- why are the predictions always linear? look at AR weight matrices
 
 
 ## chris
@@ -46,7 +46,7 @@
 - trying no dim. reduction, diff. reduction, pca-with differeing, factor analysis 
 - ar process adjustment 
 - alignment via attention 
-
+- use the growth rates instead of level
 
 
 <!-- - max_pred 1 quarter in advance (for gdp or cpi both?) -->
