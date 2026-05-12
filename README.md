@@ -46,3 +46,8 @@ With FOMC speech embeddings:
 ```bash
 python src/holdout-validation/main.py --embeddings fomc-roberta --wandb --device cuda
 ```
+
+With FOMC speech embeddings:
+```bash
+python src/holdout-validation/main.py --wandb --device cuda
+```

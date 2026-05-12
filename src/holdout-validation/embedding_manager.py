@@ -20,7 +20,7 @@ import pandas as pd
 from pathlib import Path
 from sklearn.decomposition import PCA
 
-N_PCA        = 20
+N_PCA        = 5
 RANDOM_STATE = 42
 
 # meta columns present in the full-embedding CSV
@@ -149,7 +149,7 @@ class EmbeddingManager:
         cumvar = np.cumsum(pca.explained_variance_ratio_)
         print(
             f"[EmbeddingManager] PCA fold {fold}: "
-            f"5→{cumvar[4]:.0%}  10→{cumvar[9]:.0%}  {self.n_pca}→{cumvar[-1]:.0%} "
+            # f"5→{cumvar[4]:.0%}  10→{cumvar[9]:.0%}  {self.n_pca}→{cumvar[-1]:.0%} "
             f"(fitted on {int(train_mask.sum())}/{len(self.full_df)} speeches)"
         )
 
@@ -176,7 +176,6 @@ class EmbeddingManager:
         Parameters
         ----------
         fold : 0-based index into self._splits.
-
         Returns
         -------
         pd.DataFrame — same layout as recalculate_pca() with permuted pca_* values.
