@@ -26,9 +26,9 @@ class ARRunner:
             # test if we really need both
             log = np.log(series)
             log_diff = log.diff().dropna()
-            print(f"just log adf test: {adfuller(log)[1]}")
+            # print(f"just log adf test: {adfuller(log)[1]}")
             # claude says the reason its stationary here but not when differentiating is due to misspecification of adfuller, regression='c' should be 'ct' tho.
-            print(f"log & diff adf test: {adfuller(log_diff)[1]}")
+            # print(f"log & diff adf test: {adfuller(log_diff)[1]}")
             # here, we have structural breaks in CPI, since such long time frame.
             return np.log(series).diff().dropna(), "log_diff"
         return series.copy(), "levels"  # UNRATE: already stationary in levels
@@ -41,14 +41,14 @@ class ARRunner:
         return forecast  # levels: SARIMAX forecast is already in original units
 
 
-    def _fetch_data(self, splits, target: str = "CPI", fold: int = 0):
+    # def _fetch_data(self, splits, target: str = "CPI", fold: int = 0):
+    #     train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
+    #     test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
+    #     return train, test
+
+
+    def run(self, splits, target: str = "CPI", fold: int = 0):
         train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
-        test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
-        return train, test
-
-
-    def run(self, splits, target: str = "CPI", fold: int = 0) -> pd.DataFrame:
-        train, test = self._fetch_data(splits, target, fold)
 
         series     = train.set_index("date")[target]
         freq       = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
@@ -57,7 +57,7 @@ class ARRunner:
         # transform both to stationarity if needed
         stationary, transform = self._transform(series, target)
 
-        print(f"[AR | {target}] transform={transform}, n_train={len(stationary)}, n_test={len(test)}")
+        print(f"[AR | {target}] transform={transform}, n_train={len(stationary)}")
 
         # fixed AR(1) — same spec as AR-benchmark.py: SARIMAX(1,0,0)
         model = SARIMAX(
@@ -68,19 +68,53 @@ class ARRunner:
             enforce_stationarity=False,
             enforce_invertibility=False,
         )
-        result   = model.fit(maxiter=1000, disp=False)
-        forecast_raw = result.get_forecast(steps=len(test)).predicted_mean.values
+        self._fit            = model.fit(maxiter=1000, disp=False)
+        self._last_train_val = series.iloc[-1]
+        self._transform_type = transform
+        return self._fit
 
-        forecast = self._invert(forecast_raw, series.iloc[-1], transform)
+        # step = 12 because MAX_ENCODER_LENGTH
+    def predict(self, splits, target: str = "CPI", fold: int = 0, step: int = 12) -> pd.DataFrame:
+        train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
+        test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
 
-        return pd.DataFrame({
-            "date":      test["date"].values,
-            "actual":    test[target].values,
-            "predicted": forecast,
-            "target":    target,
-        })
-        
-        
+        freq     = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
+        test_len = len(test)
+        windows: list[pd.DataFrame] = []
+        pred_context = train.copy()  # grows with own predictions, never actual test obs
+
+        for start in range(0, test_len, step):
+            end         = min(start + step, test_len)
+            window_size = end - start
+            test_window = test.iloc[start:end]
+
+            # context = train + own predictions so far (no actual test obs — no pollution)
+            # drop duplicate dates at the train/test boundary (can happen when split doesn't fall on a quarter boundary)
+            context_raw    = pred_context.drop_duplicates(subset="date", keep="last")
+            context_series = context_raw.set_index("date")[target]
+            stationary_ctx, _ = self._transform(context_series, target)
+
+            # expanding context mirrors TFT: same fixed params (from run()), but encoder sees more predicted data
+            # .apply() keeps the fitted params from run(), no refit
+            ctx_result   = self._fit.apply(stationary_ctx.asfreq(freq))
+            forecast_raw = ctx_result.get_forecast(steps=window_size).predicted_mean.values
+            # transform back to non-log; anchor on last raw value of context (not just train)
+            forecast     = self._invert(forecast_raw, context_series.iloc[-1], self._transform_type)
+
+            # append own predictions (not actuals) to context for next window
+            pred_rows    = pd.DataFrame({"date": test_window["date"].values, target: forecast})
+            pred_context = pd.concat([pred_context, pred_rows], ignore_index=True)
+
+            windows.append(pd.DataFrame({
+                "date":      test_window["date"].values,
+                "actual":    test_window[target].values.astype(float),
+                "predicted": forecast.astype(float),
+                "target":    target,
+            }))
+
+        return pd.concat(windows, ignore_index=True)
+
+
 # ---------------------------------------------------------------------------
 # ARIMA Runner
 # ---------------------------------------------------------------------------
@@ -160,13 +194,11 @@ class ARIMARunner:
         return order, seasonal_order
 
     # main run
-    def run(self, splits, target: str = "CPI", fold: int = 0) -> pd.DataFrame:
+    def run(self, splits, target: str = "CPI", fold: int = 0) -> tuple:
         train = self.dfb.get_data(splits, train=True,  model="ARIMA", target=target, fold=fold)
-        test  = self.dfb.get_data(splits, train=False, model="ARIMA", target=target, fold=fold)
 
         freq   = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
         series = train.set_index("date")[target]
-
         stationary, transform = self._transform(series, target)
 
         # use end of training data as selection window for order search
@@ -185,9 +217,6 @@ class ARIMARunner:
 
         self._save_orders("global", cached_orders)
 
-        print(f"[ARIMA | {target}] order={order}, seasonal={seasonal_order}, "
-              f"transform={transform}, n_train={len(stationary)}, n_test={len(test)}")
-
         model = SARIMAX(
             stationary.asfreq(freq),
             order=order,
@@ -195,17 +224,55 @@ class ARIMARunner:
             enforce_stationarity=False,
             enforce_invertibility=False,
         )
-        res          = model.fit(maxiter=250, disp=False)
-        forecast_raw = res.get_forecast(steps=len(test)).predicted_mean.values
-        forecast     = self._invert(forecast_raw, series.iloc[-1], transform)
+        self._fit            = model.fit(maxiter=250, disp=False)
+        self._last_train_val = series.iloc[-1]
+        self._transform_type = transform
 
-        df = pd.DataFrame({
-            "date":      test["date"].values,
-            "actual":    test[target].values,
-            "predicted": forecast,
-            "target":    target,
-        })
-        return df, order, seasonal_order
+        print(f"[ARIMA | {target}] order={order}, seasonal={seasonal_order}, "
+              f"transform={transform}, n_train={len(stationary)}")
+
+        return order, seasonal_order
+
+    # step = 12 because MAX_ENCODER_LENGTH
+    def predict(self, splits, target: str = "CPI", fold: int = 0, step: int = 12) -> pd.DataFrame:
+        train = self.dfb.get_data(splits, train=True,  model="ARIMA", target=target, fold=fold)
+        test  = self.dfb.get_data(splits, train=False, model="ARIMA", target=target, fold=fold)
+
+        freq     = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
+        test_len = len(test)
+        windows: list[pd.DataFrame] = []
+        pred_context = train.copy()  # grows with own predictions, never actual test obs
+
+        for start in range(0, test_len, step):
+            end         = min(start + step, test_len)
+            window_size = end - start
+            test_window = test.iloc[start:end]
+
+            # context = train + own predictions so far (no actual test obs — no pollution)
+            # drop duplicate dates at the train/test boundary (can happen when split doesn't fall on a quarter boundary)
+            context_raw    = pred_context.drop_duplicates(subset="date", keep="last")
+            context_series = context_raw.set_index("date")[target]
+            stationary_ctx, _ = self._transform(context_series, target)
+
+            # expanding context mirrors TFT: same fixed params (from run()), but model sees more predicted data
+            # .apply() keeps the fitted params from run(), no refit
+            ctx_result   = self._fit.apply(stationary_ctx.asfreq(freq))
+            forecast_raw = ctx_result.get_forecast(steps=window_size).predicted_mean.values
+            # transform back to non-log; anchor on last raw value of context (not just train)
+            forecast     = self._invert(forecast_raw, context_series.iloc[-1], self._transform_type)
+
+            # append own predictions (not actuals) to context for next window
+            pred_rows    = pd.DataFrame({"date": test_window["date"].values, target: forecast})
+            pred_context = pd.concat([pred_context, pred_rows], ignore_index=True)
+
+            windows.append(pd.DataFrame({
+                "date":      test_window["date"].values,
+                "actual":    test_window[target].values.astype(float),
+                "predicted": forecast.astype(float),
+                "target":    target,
+            }))
+
+        return pd.concat(windows, ignore_index=True)
 
 # ---------------------------------------------------------------------------
 # try it out here! 
@@ -227,31 +294,51 @@ class ARIMARunner:
 #           f"test [{te['date'].min().date()} – {te['date'].max().date()}] ({len(te)} rows)")
 
 # arr = ARRunner(dfb)
-# result = arr.run(splits, target="UNRATE", fold = 0)
+# arr.run(splits, target="UNRATE", fold = 0)
+# result_ar = arr.predict(splits, target="UNRATE")
+# print(result_ar)
+
 # arimar = ARIMARunner(dfb)
 # # TODO: GDP not stationary, even if log and diff
-# result = arimar.run(splits, target="UNRATE", fold = 0)
-# print(result)
+# order, seasonal_order = arimar.run(splits, target="UNRATE", fold = 0)
+# result_arima = arimar.predict(order, seasonal_order, splits, target="UNRATE")
+# print(result_arima)
 
-# # # plot the result 
+
+# print(result_arima)
+# print(result_ar)
+
+# plot the result 
 # import matplotlib.pyplot as plt
 # from pathlib import Path
 
-# out_dir = Path(path) / "out" / "ar1"
-# out_dir = Path(path) / "out" / "arima"
-# out_dir.mkdir(parents=True, exist_ok=True)
+# ar1_dir = Path(path) / "out" / "ar1"
+# ar1_dir.mkdir(parents=True, exist_ok=True)
+# arima_dir = Path(path) / "out" / "arima"
+# arima_dir.mkdir(parents=True, exist_ok=True)
 
 # fig, ax = plt.subplots(figsize=(12, 4))
-# ax.plot(result["date"], result["actual"],    label="Actual",    color="black",  linewidth=1.5)
-# ax.plot(result["date"], result["predicted"], label="Predicted", color="crimson", linewidth=1.5, linestyle="--")
-# ax.set_title(f"AR(1) — {result['target'].iloc[0]}: Predicted vs Actual")
-# ax.set_title(f"ARIMA — {result['target'].iloc[0]}: Predicted vs Actual")
+# ax.plot(result_ar["date"], result_ar["actual"],    label="Actual",    color="black",  linewidth=1.5)
+# ax.plot(result_ar["date"], result_ar["predicted"], label="Predicted", color="crimson", linewidth=1.5, linestyle="--")
+# ax.set_title(f"AR(1) — {result_ar['target'].iloc[0]}: Predicted vs Actual")
 # ax.set_xlabel("Date")
 # ax.legend()
 # ax.grid(alpha=0.3)
 # plt.tight_layout()
-# plt.savefig(out_dir / f"ar1_{result['target'].iloc[0].lower()}.png", bbox_inches="tight")
-# plt.savefig(out_dir / f"arima_{result['target'].iloc[0].lower()}.png", bbox_inches="tight")
+# plt.savefig(ar1_dir / f"ar1_{result_ar['target'].iloc[0].lower()}.png", bbox_inches="tight")
+# plt.show()
 
-# conclusion: AR(1) performs badly, especially over such a long horizon. with shorter horizon, aka more folds it would be much better. i guess this helps our tft...
+# fig, ax = plt.subplots(figsize=(12, 4))
+# ax.plot(result_arima["date"], result_arima["actual"],    label="Actual",    color="black",  linewidth=1.5)
+# ax.plot(result_arima["date"], result_arima["predicted"], label="Predicted", color="crimson", linewidth=1.5, linestyle="--")
+# ax.set_title(f"ARIMA — {result_arima['target'].iloc[0]}: Predicted vs Actual")
+# ax.set_xlabel("Date")
+# ax.legend()
+# ax.grid(alpha=0.3)
+# plt.tight_layout()
+# plt.savefig(arima_dir / f"arima_{result_arima['target'].iloc[0].lower()}.png", bbox_inches="tight")
+# plt.show()
+
+#conclusion: AR(1) performs badly, especially over such a long horizon. with shorter horizon, aka more folds it would be much better. i guess this helps our tft...
 # conclusion: ARIMA also performs quite terribly
+# conclusion after adjusting forecasting horizon to be the same as tft -> pretty good, shit

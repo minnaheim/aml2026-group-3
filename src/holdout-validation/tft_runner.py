@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import lightning.pytorch as pl
 
+import matplotlib as plt
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import EncoderNormalizer # switched from group normalizer
 from pytorch_forecasting.metrics import SMAPE
@@ -13,7 +14,8 @@ from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 warnings.filterwarnings("ignore")
 
-MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP", "GBP", "YEN", "FFR"]
+MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP",
+               "GBP_mean", "GBP_std", "YEN_mean", "YEN_std", "FFR"]
 LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 LAG_PERIODS = [1, 2, 6, 12]
 # same set as benchmark_runner.LOG_DIFF_TARGETS — log only, no differencing for now
@@ -26,7 +28,7 @@ class TFTRunner:
     MAX_ENCODER_LENGTH = 24 # 2-year monthly lookback
     MAX_PREDICTION_LENGTH = 12 # 12-month forecast horizon
     PATIENCE = 5
-    MAX_EPOCHS = 3
+    MAX_EPOCHS = 50
     LEARNING_RATE = 0.03
 
     def __init__(self, dfb):
@@ -112,8 +114,15 @@ class TFTRunner:
         lag_cols   = [f"{c}_lag_{l}" for c in LAG_VARS for l in LAG_PERIODS
                       if f"{c}_lag_{l}" in train_df.columns]
         
-        # if pca present
+        # if pca present (only when --embedding was passed)
         pca_cols_present = [c for c in self.dfb.pca_cols if c in train_df.columns]
+
+        # fomc timing / dissent cols — only present when speeches are loaded
+        FOMC_KNOWN   = ['days_to_fomc', 'days_since_fomc', 'fomc_cycle_pos', 'meeting_this_month']
+        DISSENT_COLS = ['dissent_rate_mean', 'dissent_net_hawk_mean', 'dissent_net_hawk_sum',
+                        'n_tighter_sum', 'n_easier_sum', 'any_dissent_recent']
+        fomc_known_present   = [c for c in FOMC_KNOWN   if c in train_df.columns]
+        dissent_cols_present = [c for c in DISSENT_COLS if c in train_df.columns]
 
         meta_cat_cols  = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
                           for c in ('meta_units', 'meta_frequency')
@@ -121,9 +130,14 @@ class TFTRunner:
         meta_real_cols = [f"{v}_{c}" for v in self.dfb.TARGET_COLS
                           for c in ('meta_popularity', 'meta_years_of_history')
                           if f"{v}_{c}" in train_df.columns]
+        
+         # hold out the last MAX_PREDICTION_LENGTH rows as a true validation window                                                                                                                                                                    
+         # so val_loss reflects out-of-sample fit within the training period                                                                                                                                                                           
+        fit_df = train_df.iloc[:-self.MAX_PREDICTION_LENGTH]           
 
         training = TimeSeriesDataSet(
-            data=train_df,
+            data=fit_df,
+            # data=train_df,
             time_idx='time_idx',
             target=target,
             group_ids=['series_id'],
@@ -131,9 +145,10 @@ class TFTRunner:
             max_prediction_length=self.MAX_PREDICTION_LENGTH,
             static_categoricals=['series_id'] + meta_cat_cols,
             static_reals=meta_real_cols,
-            time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday'],
-            # speeches are time varying, so i add them here!
-            time_varying_unknown_reals=covariates + lag_cols + pca_cols_present,
+            time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday',
+                                      # fomc dates known in advance — only included with speeches
+                                      *fomc_known_present],
+            time_varying_unknown_reals=[*covariates, *lag_cols, *pca_cols_present, *dissent_cols_present],
             target_normalizer=EncoderNormalizer(transformation="softplus"),
             add_relative_time_idx=True,
             add_target_scales=True,
@@ -151,7 +166,8 @@ class TFTRunner:
                   use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu'):
         """Build trainer + TFT, fit, return best checkpoint path."""
         callbacks = [
-            EarlyStopping(monitor='train_loss', min_delta=1e-2,
+            # changed this to val_loss -> train-loss will usually increase, even if val_loss stops
+            EarlyStopping(monitor='val_loss', min_delta=1e-2,
                           patience=self.PATIENCE, verbose=False, mode='min'),
         ]
         if use_wandb:
@@ -171,7 +187,7 @@ class TFTRunner:
             accelerator=accelerator,
             devices=1,
             gradient_clip_val=0.25,
-            limit_train_batches=5,
+            # limit_train_batches=60,
             callbacks=callbacks,
             enable_model_summary=True,
             logger=logger,
@@ -180,8 +196,8 @@ class TFTRunner:
         tft = TemporalFusionTransformer.from_dataset(
             training_ds,
             learning_rate=self.LEARNING_RATE,
-            lstm_layers=2,
-            hidden_size=16,
+            lstm_layers=4, # before was 2
+            hidden_size=64, # before this was 16
             attention_head_size=2,
             dropout=0.2,
             hidden_continuous_size=8,
@@ -193,20 +209,72 @@ class TFTRunner:
         print(f"[TFT] parameters: {tft.size()/1e3:.1f}k")
 
         trainer.fit(tft, train_dataloaders=train_dl, val_dataloaders=val_dl)
-        return trainer.checkpoint_callback.best_model_path
+        ckpt = trainer.checkpoint_callback.best_model_path
+
+        # store for interpret_output
+        self._last_ckpt = ckpt
+        self._last_training_ds = training_ds
+        self._last_val_dl = val_dl
+        self._last_device = device
+        return ckpt
+
+    def interpret_output(self, out_dir: Path | None = None) -> dict:
+        """Variable importance + attention from the last trained model.
+
+        Prints encoder/decoder/static importance tables.
+        If out_dir is given, saves plot_interpretation figures there.
+        """
+        from pytorch_forecasting import TemporalFusionTransformer as TFT
+
+        map_loc = self._last_device if self._last_device in ("cuda", "mps") else "cpu"
+        model = TFT.load_from_checkpoint(self._last_ckpt, map_location=map_loc)
+        model.eval()
+
+        predict_result = model.predict(self._last_val_dl, mode="raw", return_x=True)
+        # newer pytorch_forecasting returns NamedTuple(output, x, index); .output is the raw dict
+        raw_preds = predict_result.output
+        interpretation = model.interpret_output(raw_preds, reduction="mean")
+  
+        # variable name lists in the same order as the variable-selection networks
+        ds = self._last_training_ds
+        # if None, just empty list, cannot concat None
+        name_map = {
+            "static_variables":  (ds.static_reals or []) + (ds.static_categoricals or []),
+            "encoder_variables": ((ds.time_varying_unknown_reals or [])
+                                  + (ds.time_varying_unknown_categoricals or [])
+                                  + (ds.time_varying_known_reals or [])
+                                  + (ds.time_varying_known_categoricals or [])),
+            "decoder_variables": ((ds.time_varying_known_reals or [])
+                                  + (ds.time_varying_known_categoricals or [])),
+        }
+        importance_dfs = {}
+        for key, names in name_map.items():
+            if key not in interpretation:
+                continue
+            vals = interpretation[key].cpu().numpy()
+            n = min(len(names), len(vals))
+            imp = (
+                pd.DataFrame({"variable": names[:n], "importance": vals[:n]})
+                .sort_values("importance", ascending=False)
+            )
+            importance_dfs[key] = imp
+            print(f"\n  {key.replace('_', ' ')}:")
+            print(imp.to_string(index=False))
+
+        return importance_dfs
 
     def run(self, splits, target: str, fold: int = 0, batch_size: int = 128,
             use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu') -> str:
         """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
-        train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
+        self._train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
         print("Got data from data_frame_builder...")
-        train_df  = self._add_tft_vars(train_raw, target)
-        # print(train_df.columns)
-        # print(train_df.tail(30))
+        train_df = self._add_tft_vars(self._train_raw, target)
+        print("*************************** columns of the train_df (to check whether embeddings inside) ***************************")
+        print(train_df.columns[1:50])
 
-        training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
+        self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
         print("Created TimeSeriesDataSet for tft...")
-        return self.train_tft(training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
+        return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
                 batch_size: int = 128, device: str = 'cpu') -> pd.DataFrame:
@@ -216,22 +284,29 @@ class TFTRunner:
         predictions are made in non-overlapping windows of MAX_PREDICTION_LENGTH days.
         Returns a monthly (or quarterly for GDP) DataFrame with date/actual/predicted/target.
         """
-        from pytorch_forecasting import TemporalFusionTransformer as TFT
+        
 
+        # fetch model params & evaluate
         map_location = device if device in ("cuda", "mps") else "cpu"
-        model = TFT.load_from_checkpoint(checkpoint_path, map_location=map_location)
+        # this is written in train_tft
+        model = TemporalFusionTransformer.load_from_checkpoint(checkpoint_path, map_location=map_location)
         model.eval()
 
-        train_raw = self.dfb.get_data(splits, train=True,  model='TFT', fold=fold)
-        test_raw  = self.dfb.get_data(splits, train=False, model='TFT', fold=fold)
+        # check if we have the training_ds & train_raw available (from run method) if not, re-create
+        train_raw   = getattr(self, '_train_raw',   self.dfb.get_data(splits, train=True,  model='TFT', fold=fold))
+        training_ds = getattr(self, '_training_ds', None)
+        # TODO: why would it be? run() before predict()...
+        # if training_ds is None:
+        #     train_df    = self._add_tft_vars(train_raw, target)
+        #     training_ds, _, _ = self.create_tft_dataset(train_df, target, fold, batch_size)
 
-        # build reference training dataset (data manipulation only — no retraining)
-        train_df    = self._add_tft_vars(train_raw, target)
-        training_ds, _, _ = self.create_tft_dataset(train_df, target, fold, batch_size)
+        # get validation data (not test. misnomer), test not used in cv
+        test_raw = self.dfb.get_data(splits, train=False, model='TFT', fold=fold)
 
         test_len = len(test_raw)
         step     = self.MAX_PREDICTION_LENGTH
         all_rows: list[dict] = []
+        accumulated_preds: dict = {}  # date -> prediction in original scale (no pollution)
 
         for start in range(0, test_len, step):
             end         = min(start + step, test_len)
@@ -243,6 +318,11 @@ class TFTRunner:
             # a full MAX_PREDICTION_LENGTH decoder window to index into.
             context_end = min(start + step, test_len)
             context_raw = pd.concat([train_raw, test_raw.iloc[:context_end]], ignore_index=True)
+            # replace target values in test portion with own predictions (no actual test obs — no pollution)
+            if accumulated_preds:
+                # mask the values which have been predicted (= accumulated)
+                mask = context_raw["date"].isin(accumulated_preds)
+                context_raw.loc[mask, target] = context_raw.loc[mask, "date"].map(accumulated_preds)
             context_df  = self._add_tft_vars(context_raw, target)
 
             pred_ds = TimeSeriesDataSet.from_dataset(
@@ -265,6 +345,8 @@ class TFTRunner:
                 # reverse the logging from before
                 if target in LOG_TARGETS:
                     pred = np.exp(pred)
+                # accumulate predictions in original scale for next window's context (no pollution)
+                accumulated_preds[row["date"]] = pred
                 all_rows.append({
                     "date":      row["date"],
                     "actual":    float(row[target]),  # test_raw is original scale

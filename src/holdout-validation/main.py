@@ -20,9 +20,10 @@ import wandb
 import os
 
 sys.path.insert(0, str(Path(__file__).parent))
-from data_frame_builder import DataFrameBuilder
+from data_frame_builder  import DataFrameBuilder
 from benchmark_runner    import ARRunner, ARIMARunner
 from tft_runner          import TFTRunner
+from embedding_manager   import EmbeddingManager
 
 MAIN_TARGETS = ["CPI", "UNRATE", "GDP"]
 ALL_TARGETS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
@@ -58,6 +59,7 @@ def compute_metrics(df: pd.DataFrame) -> dict:
 
 # ── save ─────────────────────────────────────────────────────────────────────
 
+# TODO: change here to sort by target
 def save_results(results: dict, out_dir: Path) -> pd.DataFrame:
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -68,6 +70,7 @@ def save_results(results: dict, out_dir: Path) -> pd.DataFrame:
             rows.append({"model": model, "target": target, **m})
 
     metrics_df = pd.DataFrame(rows)[["model", "target", "MAE", "RMSE", "MAPE"]]
+    metrics_df = metrics_df.sort_values(by=["target", "model"]).reset_index(drop=True)
     metrics_df.to_csv(out_dir / "metrics.csv", index=False)
     print("\n=== Evaluation Metrics ===")
     print(metrics_df.to_string(index=False))
@@ -118,6 +121,7 @@ def plot_results(results: dict, out_dir: Path):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    # parse arguments passed by user
     parser = argparse.ArgumentParser(
         description="Holdout validation pipeline: AR(1) benchmark vs TFT"
     )
@@ -134,7 +138,15 @@ def main():
         "--device", default="cpu", choices=["cpu", "mps", "cuda"],
         help="Compute device for TFT (default: cpu)",
     )
+    parser.add_argument(
+        "--embedding", default=None, choices=["fomc-roberta"],
+        help="Speech embedding to include (default: none — macro-only mode)",
+    )
     args = parser.parse_args()
+
+    # make sure that there is no sneaky cuda being used 
+    if args.device != "cuda":                                                                                                                                            
+          os.environ["CUDA_VISIBLE_DEVICES"] = ""   
 
     root    = Path(__file__).parent.parent.parent
     out_dir = root / "out" / "holdout"
@@ -142,15 +154,24 @@ def main():
     if args.wandb:
         _setup_wandb()
 
-    print(f"Targets : {args.targets}")
-    print(f"Device  : {args.device}")
-    print(f"W&B     : {args.wandb}")
-    print(f"Output  : {out_dir}\n")
+    print(f"Targets   : {args.targets}")
+    print(f"Device    : {args.device}")
+    print(f"Embedding : {args.embedding or 'none'}")
+    print(f"W&B       : {args.wandb}")
+    print(f"Output    : {out_dir}\n")
 
     # ── 1. split the data acc. to data-frame-builder ─────────────────────────
+    # dissents are loaded explicitly so those features appear in process_data()
+    # regardless of whether embeddings are used
     dfb = DataFrameBuilder(str(root))
+    dfb.load_fomc_dissent()
     df  = dfb.process_data()
     splits, holdout = dfb.generate_split(df)
+
+    if args.embedding == "fomc-roberta":
+        # re-fit PCA per fold on training speeches only — no look-ahead leakage
+        emb = EmbeddingManager(str(root)).load()
+        splits = dfb.add_leakage_free_embeddings(splits, emb)
 
     for s in splits:
         tr, te = s["train"], s["test"]
@@ -177,17 +198,18 @@ def main():
         print(f"{'─' * 55}")
 
         print("\n[AR(1)]")
-        # TODO: maybe keep same structure for AR, TFT -> tft has predict method...
-        ar_df = ar_runner.run(splits, target=target, fold=0)
+        ar_runner.run(splits, target=target, fold=0)
+        ar_df = ar_runner.predict(splits, target=target, fold=0)
         results["AR"][target] = ar_df
         print(f"  → {len(ar_df)} predictions")
 
 
         # add arima order for each variable
         print("\n[ARIMA]")
-        arima_df, arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=0)
+        arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=0)
+        arima_df = arima_runner.predict(splits, target=target, fold=0)
         results["ARIMA"][target] = arima_df
-        print(f"  → {len(arima_df)} predictions  (order={arima_order}, seasonal={arima_seasonal})")
+        print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
         print("\n[TFT – training]")
         ckpt = tft_runner.run(
@@ -195,6 +217,12 @@ def main():
             use_wandb=args.wandb, device=args.device,
         )
         print(f"  → best checkpoint: {ckpt}")
+
+        # plot the vars that contribute most
+        print("\n[TFT – interpretation]")
+        interpretation = tft_runner.interpret_output(out_dir)
+        print(f"interpretation: {interpretation}")
+
 
         print("\n[TFT – inference]")
         tft_df = tft_runner.predict(
