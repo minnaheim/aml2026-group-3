@@ -28,9 +28,6 @@
 # Individual To Do's 
 
 ## minna:
-- check transfirmation: if you take the log of all vars? maybe try both?
-- adapt the `data_frame_builder` with the new embeddings timeline: 1986-2023 (so holdout 6 months, then train & validation)
-- (check if gdp predicts 12 months or 4 years)
 - multiple folds
 - hyperparam tuning (with nested cv) -> chris
 - why are the predictions always linear? look at AR weight matrices
