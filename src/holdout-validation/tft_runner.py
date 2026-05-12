@@ -208,7 +208,7 @@ class TFTRunner:
         print(f"[TFT] parameters: {tft.size()/1e3:.1f}k")
 
         trainer.fit(tft, train_dataloaders=train_dl, val_dataloaders=val_dl)
-        ckpt = self.train_tft(training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
+        ckpt = trainer.checkpoint_callback.best_model_path
 
         # store for interpret_output
         self._last_ckpt = ckpt
@@ -229,19 +229,22 @@ class TFTRunner:
         model = TFT.load_from_checkpoint(self._last_ckpt, map_location=map_loc)
         model.eval()
 
-        raw_preds, _ = model.predict(self._last_val_dl, mode="raw", return_x=True)
+        predict_result = model.predict(self._last_val_dl, mode="raw", return_x=True)
+        # newer pytorch_forecasting returns NamedTuple(output, x, index); .output is the raw dict
+        raw_preds = predict_result.output
         interpretation = model.interpret_output(raw_preds, reduction="mean")
 
         # variable name lists in the same order as the variable-selection networks
         ds = self._last_training_ds
+        # if None, just empty list, cannot concat None
         name_map = {
-            "static_variables":  ds.static_reals + ds.static_categoricals,
-            "encoder_variables": (ds.time_varying_unknown_reals
-                                  + ds.time_varying_unknown_categoricals
-                                  + ds.time_varying_known_reals
-                                  + ds.time_varying_known_categoricals),
-            "decoder_variables": (ds.time_varying_known_reals
-                                  + ds.time_varying_known_categoricals),
+            "static_variables":  (ds.static_reals or []) + (ds.static_categoricals or []),
+            "encoder_variables": ((ds.time_varying_unknown_reals or [])
+                                  + (ds.time_varying_unknown_categoricals or [])
+                                  + (ds.time_varying_known_reals or [])
+                                  + (ds.time_varying_known_categoricals or [])),
+            "decoder_variables": ((ds.time_varying_known_reals or [])
+                                  + (ds.time_varying_known_categoricals or [])),
         }
         for key, names in name_map.items():
             if key not in interpretation:

@@ -54,10 +54,11 @@
 
 
 #### minna's todos:
-- kafka embeddings 
-- check if gdp predicts 12 months or 4 years
 - add prepare-presentation
+- check if gdp predicts 12 months or 4 years
+- ( kafka embeddings )
 - try with different macro aggregation methods
+- shorten to only include macro data as of 2023 
 
 #### anna's todo:
 - finish anna/tft

@@ -313,6 +313,7 @@ class DataFrameBuilder:
     
     # resample Daily variables to Monthly before merging
     # to prevent the 1,200 row expansion
+    # alternative to last, try sum, mean, first
     df_daily_m = df_daily.set_index("date").resample("MS").last().reset_index()
         
     df = pd.merge(df, df_daily_m, on='date', how='left') 
