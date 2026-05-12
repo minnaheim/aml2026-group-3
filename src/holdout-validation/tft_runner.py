@@ -14,7 +14,8 @@ from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 warnings.filterwarnings("ignore")
 
-MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP", "GBP", "YEN", "FFR"]
+MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP",
+               "GBP_mean", "GBP_std", "YEN_mean", "YEN_std", "FFR"]
 LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 LAG_PERIODS = [1, 2, 6, 12]
 # same set as benchmark_runner.LOG_DIFF_TARGETS — log only, no differencing for now

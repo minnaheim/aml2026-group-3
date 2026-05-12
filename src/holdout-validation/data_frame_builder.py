@@ -296,8 +296,7 @@ class DataFrameBuilder:
     daily_path = self.path + '/data/macro-vars-daily.csv'
     df_daily = self._read_rename_date(daily_path)
     df_daily = df_daily.drop(columns=["SOFR", "T10Y2Y", "EUR"]) # remove shorter vars: SOFR, T10Y2Y, EUR
-    # make 5-day daily vars (GBP, YEN) 0 on weekends instead of NaN
-    df_daily[['GBP', 'YEN']] = df_daily[['GBP', 'YEN']].fillna(0)
+    # NaNs on weekends/holidays are skipped by .agg(mean/std) — no pre-fill needed
 
     # ------- get quarterly data --------
 
@@ -314,21 +313,27 @@ class DataFrameBuilder:
     # resample Daily variables to Monthly before merging
     # to prevent the 1,200 row expansion
     # alternative to last, try sum, mean, first
-    df_daily_m = df_daily.set_index("date").resample("MS").last().reset_index()
-        
-    df = pd.merge(df, df_daily_m, on='date', how='left') 
+    daily_agg = df_daily.set_index("date").resample("MS").agg(["mean", "std"])
+    daily_agg.columns = [f"{col}_{agg}" for col, agg in daily_agg.columns]
+    df_daily_m = daily_agg.reset_index()
+
+    df = pd.merge(df, df_daily_m, on='date', how='left')
 
     # forward-fill quarterly vars (GDP)
     df[self.TARGET_COLS] = df[self.TARGET_COLS].ffill()
-    
+
+    # make 5-day daily vars (GBP, YEN) 0 on weekends/missing instead of NaN
+    daily_cols = [c for c in df.columns if c.startswith(("GBP_", "YEN_"))]
+    df[daily_cols] = df[daily_cols].fillna(0)
+
     # add the fomc date and dissent info
     # speech features are added per-fold by add_leakage_free_embeddings()
     if self.dissent_df is not None:
         df = self._add_dissent_features(df)
         df = self._add_fomc_timing_features(df)
-            
+
     # trim leading NaNs
-    df = df.dropna(subset=['GBP']).reset_index(drop=True)
+    df = df.dropna(subset=['GBP_mean']).reset_index(drop=True)
 
     print(f"\nMonthly Date range: {df['date'].min()} to {df['date'].max()}, {len(df)} rows")    
     # print(df.head(10))
