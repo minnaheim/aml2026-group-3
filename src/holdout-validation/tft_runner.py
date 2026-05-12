@@ -27,7 +27,7 @@ class TFTRunner:
     # UPDATED: Change from days to months
     MAX_ENCODER_LENGTH = 24 # 2-year monthly lookback
     MAX_PREDICTION_LENGTH = 12 # 12-month forecast horizon
-    PATIENCE = 5
+    PATIENCE = 15
     MAX_EPOCHS = 50
     LEARNING_RATE = 0.03
 
@@ -167,7 +167,7 @@ class TFTRunner:
         """Build trainer + TFT, fit, return best checkpoint path."""
         callbacks = [
             # changed this to val_loss -> train-loss will usually increase, even if val_loss stops
-            EarlyStopping(monitor='val_loss', min_delta=1e-2,
+            EarlyStopping(monitor='val_loss',
                           patience=self.PATIENCE, verbose=False, mode='min'),
         ]
         if use_wandb:
