@@ -233,7 +233,7 @@ class TFTRunner:
         # newer pytorch_forecasting returns NamedTuple(output, x, index); .output is the raw dict
         raw_preds = predict_result.output
         interpretation = model.interpret_output(raw_preds, reduction="mean")
-
+  
         # variable name lists in the same order as the variable-selection networks
         ds = self._last_training_ds
         # if None, just empty list, cannot concat None
@@ -246,6 +246,7 @@ class TFTRunner:
             "decoder_variables": ((ds.time_varying_known_reals or [])
                                   + (ds.time_varying_known_categoricals or [])),
         }
+        importance_dfs = {}
         for key, names in name_map.items():
             if key not in interpretation:
                 continue
@@ -255,19 +256,11 @@ class TFTRunner:
                 pd.DataFrame({"variable": names[:n], "importance": vals[:n]})
                 .sort_values("importance", ascending=False)
             )
+            importance_dfs[key] = imp
             print(f"\n  {key.replace('_', ' ')}:")
             print(imp.to_string(index=False))
 
-        if out_dir is not None:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            figs = model.plot_interpretation(interpretation)
-            for name, fig in figs.items():
-                path = out_dir / f"tft_interpretation_{name}.png"
-                fig.savefig(path, bbox_inches="tight", dpi=150)
-                plt.close(fig)
-                print(f"  Saved: {path}")
-
-        return interpretation
+        return importance_dfs
 
     def run(self, splits, target: str, fold: int = 0, batch_size: int = 128,
             use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu') -> str:

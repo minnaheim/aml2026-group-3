@@ -220,8 +220,8 @@ def main():
 
         # plot the vars that contribute most
         print("\n[TFT – interpretation]")
-        interpretation = tft_runner.interpret_output()
-        print(f"++++++++++++++++++++++ interpretation: ++++++++++++++++++++++++ \n", interpretation)
+        interpretation = tft_runner.interpret_output(out_dir)
+        print(f"interpretation: {interpretation}")
 
 
         print("\n[TFT – inference]")
