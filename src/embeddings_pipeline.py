@@ -4,7 +4,7 @@ Embedding pipeline for Fed speeches.
 Supported models:
   finbert      — ProsusAI/finbert (BERT-based encoder)
   fomc-roberta — gtfintechlab/FOMC-RoBERTa (RoBERTa-based encoder, gated HuggingFace repo)
-  llama3.1     — LLaMA 3.1 loaded from a local path (decoder-only, mean pooling only)
+  roberta      — roberta-base (vanilla RoBERTa encoder; comparable baseline for FOMC-RoBERTa)
 
 Supported truncation modes:
   512    — first 512 tokens only
@@ -20,7 +20,8 @@ Usage examples:
   python embeddings_pipeline.py --model finbert --truncation 512
   python embeddings_pipeline.py --model finbert --truncation full
   python embeddings_pipeline.py --model fomc-roberta --truncation full --hf-token hf_YOUR_TOKEN
-  python embeddings_pipeline.py --model llama3.1 --truncation full --llama-path /path/to/llama3.1
+  python embeddings_pipeline.py --model roberta --truncation full
+  python src/embeddings_pipeline.py --model fomc-roberta --truncation full --no-pca
 """
 
 import argparse
@@ -33,13 +34,11 @@ import pandas as pd
 import torch
 import zipfile
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
 from transformers import AutoModel, AutoTokenizer
 
-try:
-    import ollama as _ollama
-except ImportError:
-    _ollama = None  # only needed when --model llama3.1 without --llama-path
+
 
 #---------------------------------------------------------------------------
 # Constants (not model-specific)
@@ -47,10 +46,7 @@ except ImportError:
 
 MAX_LENGTH   = 512   # hard token limit per window
 STRIDE       = 128   # token overlap between consecutive windows
-# Ollama: rough char budget (≈4 chars/token × 512 tokens)
-_OLLAMA_CHARS_512   = 2000
-_OLLAMA_CHARS_CHUNK = 2000
-_OLLAMA_CHARS_STEP  = 1500   # overlap = 500 chars ≈ 128 tokens
+
 CHUNK_BATCH  = 16    # windows per forward pass — lower if GPU OOM
 N_PCA        = 20    # PCA components kept for TFT input
 RANDOM_STATE = 42
@@ -71,6 +67,7 @@ META_COLS = [
 _HF_MODEL_IDS = {
     "finbert":      "ProsusAI/finbert",
     "fomc-roberta": "gtfintechlab/FOMC-RoBERTa",
+    "roberta":      "roberta-base",
 }
 
 project_root = Path(__file__).resolve().parents[1]
@@ -82,10 +79,10 @@ data_dir     = project_root / "data"
 #---------------------------------------------------------------------------
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Generate speech embeddings via FinBERT, FOMC-RoBERTa or LLaMA 3.1")
+    p = argparse.ArgumentParser(description="Generate speech embeddings via FinBERT, FOMC-RoBERTa or RoBERTa-base")
     p.add_argument(
         "--model",
-        choices=["finbert", "fomc-roberta", "llama3.1"],
+        choices=["finbert", "fomc-roberta", "roberta"],
         default="finbert",
         help="Embedding model to use (default: finbert)",
     )
@@ -101,20 +98,28 @@ def _parse_args() -> argparse.Namespace:
         help="HuggingFace access token (required for fomc-roberta gated repo)",
     )
     p.add_argument(
-        "--llama-path",
-        default=None,
-        help="Local filesystem path to LLaMA 3.1 model weights (required when --model llama3.1)",
-    )
-    p.add_argument(
-        "--ollama-model",
-        default="llama3.1:latest",
-        help="Ollama model name to use when --model llama3.1 and no --llama-path is given (default: llama3.1:latest)",
-    )
-    p.add_argument(
         "--sample",
         type=int,
         default=None,
         help="Process only the first N speeches (for testing). Omit to process all.",
+    )
+    p.add_argument(
+        "--train-cutoff",
+        default="2011-01-01",
+        metavar="YYYY-MM-DD",
+        help=(
+            "Fit PCA (and its StandardScaler) only on speeches strictly before this date, "
+            "then transform all speeches. Prevents future speeches from influencing the "
+            "PCA axes or normalisation. Default: 2011-01-01 (end of the TFT training "
+            "period for the 1971-based pipeline with TRAIN_DEC=0.8, FINAL_HOLDOUT=12). "
+            "Pass 'none' to disable (fit on all speeches)."
+        ),
+    )
+    p.add_argument(
+        "--no-pca",
+        action="store_true",
+        help="Skip PCA entirely — save only the full high-dim embeddings. "
+             "Useful when PCA will be refit later inside the CV pipeline.",
     )
     return p.parse_args()
 
@@ -126,31 +131,14 @@ def _parse_args() -> argparse.Namespace:
 def load_model_and_tokenizer(
     model_name: str,
     hf_token: str | None = None,
-    llama_path: str | None = None,
 ) -> tuple:
     """Return (tokenizer, model, is_decoder_only)."""
-
-    if model_name == "llama3.1":
-        if not llama_path:
-            raise ValueError("--llama-path is required when --model llama3.1")
-        print(f"Loading LLaMA 3.1 from local path: {llama_path}")
-        tok = AutoTokenizer.from_pretrained(llama_path)
-        # LLaMA has no pad token — use EOS
-        if tok.pad_token is None:
-            tok.pad_token = tok.eos_token
-        mdl = AutoModel.from_pretrained(
-            llama_path,
-            torch_dtype=torch.float16,
-            device_map="auto",
-        )
-        return tok, mdl, True  # decoder-only
-
     hf_id = _HF_MODEL_IDS[model_name]
     print(f"Loading {model_name} ({hf_id}) …")
     kwargs = {"token": hf_token} if hf_token else {}
     tok = AutoTokenizer.from_pretrained(hf_id, **kwargs)
     mdl = AutoModel.from_pretrained(hf_id, **kwargs)
-    return tok, mdl, False  # encoder
+    return tok, mdl, False  # encoder-only
 
 
 #---------------------------------------------------------------------------
@@ -212,8 +200,7 @@ def _stem(pooling: str, truncation: str, model_name: str) -> str:
 
 
 #---------------------------------------------------------------------------
-# Version 1: first-512-tokens embedding (encoder models only for CLS;
-#            mean pooling available for all models including LLaMA)
+# Version 1: first-512-tokens embedding
 #---------------------------------------------------------------------------
 
 def embed_512(
@@ -413,83 +400,6 @@ def embed_full(
 
 
 #---------------------------------------------------------------------------
-# Ollama-based embeddings (used when --model llama3.1 and no --llama-path)
-#---------------------------------------------------------------------------
-
-def _ollama_embed_text(ollama_model: str, text: str) -> np.ndarray:
-    """Call Ollama embeddings endpoint for a single text string."""
-    try:
-        # ollama >= 0.4: ollama.embed(model, input) -> EmbeddingsResponse
-        response = _ollama.embed(model=ollama_model, input=text)
-        return np.array(response.embeddings[0], dtype=np.float32)
-    except AttributeError:
-        # ollama < 0.4: ollama.embeddings(model, prompt) -> dict
-        response = _ollama.embeddings(model=ollama_model, prompt=text)
-        return np.array(response["embedding"], dtype=np.float32)
-
-
-def embed_ollama_512(
-    df: pd.DataFrame,
-    ollama_model: str,
-) -> tuple[None, np.ndarray]:
-    """
-    Truncate each speech to ~512 tokens (via char budget) and embed via Ollama.
-    Returns (None, mean_matrix) — no CLS token for decoder-only models.
-    """
-    texts = [t[:_OLLAMA_CHARS_512] for t in df["_text"]]
-    start = time.time()
-    vecs = []
-    for i, text in enumerate(texts):
-        if i % 50 == 0:
-            print(f"    {i:>5} / {len(texts)}")
-        vecs.append(_ollama_embed_text(ollama_model, text or " "))
-    print(f"  Inference (512-truncation) via Ollama: {time.time() - start:.1f}s")
-    return None, np.vstack(vecs)
-
-
-def embed_ollama_full(
-    df: pd.DataFrame,
-    ollama_model: str,
-) -> tuple[None, np.ndarray]:
-    """
-    Chunk-and-average over full speech text using Ollama embeddings.
-    Returns (None, mean_matrix) — no CLS token for decoder-only models.
-    """
-    n = len(df)
-    print(f"  Embedding {n:,} speeches via Ollama chunk-and-average …")
-    start = time.time()
-    all_mean = []
-
-    for i, (_, row) in enumerate(df.iterrows()):
-        if i % 50 == 0:
-            print(f"    {i:>5} / {n}")
-        text = row["_text"]
-        if not text.strip():
-            all_mean.append(None)
-            continue
-
-        # build character-based sliding windows
-        chunks, pos = [], 0
-        while pos < len(text):
-            chunks.append(text[pos : pos + _OLLAMA_CHARS_CHUNK])
-            if pos + _OLLAMA_CHARS_CHUNK >= len(text):
-                break
-            pos += _OLLAMA_CHARS_STEP
-
-        chunk_vecs = [_ollama_embed_text(ollama_model, c) for c in chunks]
-        all_mean.append(np.mean(chunk_vecs, axis=0).astype(np.float32))
-
-    # fill any empty speeches with zero vector of inferred size
-    hidden_size = next(v.shape[0] for v in all_mean if v is not None)
-    mean_out = np.vstack([
-        v if v is not None else np.zeros(hidden_size, dtype=np.float32)
-        for v in all_mean
-    ])
-    print(f"  Inference (full-speech) via Ollama: {time.time() - start:.1f}s")
-    return None, mean_out
-
-
-#---------------------------------------------------------------------------
 # PCA + save helpers
 #---------------------------------------------------------------------------
 
@@ -499,9 +409,17 @@ def _fit_and_save_pca(
     truncation: str,
     model_name: str,
     out_dir: Path,
+    train_mask: np.ndarray | None = None,
 ) -> np.ndarray:
-    pca     = PCA(n_components=N_PCA, random_state=RANDOM_STATE)
-    reduced = pca.fit_transform(embeddings)
+    pca = PCA(n_components=N_PCA, random_state=RANDOM_STATE)
+    if train_mask is not None:
+        # fit on train-period speeches only, then project all speeches
+        # avoids leaking future speech variance into the PCA axes
+        pca.fit(embeddings[train_mask])
+        reduced = pca.transform(embeddings)
+        print(f"    PCA ({pooling}): fitted on {train_mask.sum()} / {len(embeddings)} speeches (train-only)")
+    else:
+        reduced = pca.fit_transform(embeddings)
 
     cumvar = np.cumsum(pca.explained_variance_ratio_)
     print(f"    PCA ({pooling}): ", end="")
@@ -510,10 +428,22 @@ def _fit_and_save_pca(
             print(f"{k}→{cumvar[k-1]:.0%}  ", end="")
     print()
 
+    # normalise PCA scores: fit scaler on same train speeches, transform all
+    # ensures each principal component has zero mean and unit variance on train data
+    scaler = StandardScaler()
+    if train_mask is not None:
+        scaler.fit(reduced[train_mask])
+    else:
+        scaler.fit(reduced)
+    reduced = scaler.transform(reduced)
+
     pkl_path = out_dir / f"pca_model_{_stem(pooling, truncation, model_name)}.pkl"
     with open(pkl_path, "wb") as fh:
         pickle.dump(pca, fh)
-    print(f"    Saved: {pkl_path.name}")
+    scaler_path = out_dir / f"pca_scaler_{_stem(pooling, truncation, model_name)}.pkl"
+    with open(scaler_path, "wb") as fh:
+        pickle.dump(scaler, fh)
+    print(f"    Saved: {pkl_path.name}, {scaler_path.name}")
     return reduced
 
 
@@ -525,6 +455,8 @@ def save_outputs(
     truncation: str,
     model_name: str,
     out_dir: Path,
+    train_cutoff: str | None = None,
+    skip_pca: bool = False,
 ) -> None:
     meta_df = df[available_meta].copy().reset_index(drop=True)
     if "Date" in meta_df.columns:
@@ -534,6 +466,17 @@ def save_outputs(
     if cls_matrix is not None:
         poolings.append(("cls", cls_matrix))
     poolings.append(("mean", mean_matrix))
+
+    # build train_mask from cutoff date if provided
+    train_mask = None
+    if train_cutoff is not None:
+        cutoff_ts = pd.Timestamp(train_cutoff)
+        dates = pd.to_datetime(meta_df["Date"], errors="coerce") if "Date" in meta_df.columns else None
+        if dates is None:
+            print("    WARNING: no Date column found — ignoring --train-cutoff")
+        else:
+            train_mask = (dates < cutoff_ts).to_numpy()
+            print(f"    Train cutoff: {train_cutoff}  ({train_mask.sum()} train / {(~train_mask).sum()} test speeches)")
 
     for pooling, matrix in poolings:
         stem = _stem(pooling, truncation, model_name)
@@ -545,8 +488,12 @@ def save_outputs(
         full_df.to_csv(full_path, index=False, compression="zip")
         print(f"    Saved: {full_path.name}  shape={full_df.shape}")
 
+        if skip_pca:
+            print(f"    PCA skipped (--no-pca).")
+            continue
+
         # PCA-reduced embeddings (TFT input)
-        reduced  = _fit_and_save_pca(matrix, pooling, truncation, model_name, out_dir)
+        reduced  = _fit_and_save_pca(matrix, pooling, truncation, model_name, out_dir, train_mask)
         pca_cols = [f"pca_{i}" for i in range(N_PCA)]
         pca_df   = pd.concat([meta_df, pd.DataFrame(reduced, columns=pca_cols)], axis=1)
         pca_path = out_dir / f"embeddings_pca_{stem}.csv"
@@ -561,26 +508,14 @@ def save_outputs(
 def main() -> None:
     args = _parse_args()
 
-    ollama_mode = args.model == "llama3.1" and not args.llama_path
-
-    if ollama_mode:
-        if _ollama is None:
-            raise ImportError("Install the ollama package: pip install ollama")
-        print(f"Loading LLaMA 3.1 via Ollama ({args.ollama_model}) …")
-        # Infer hidden size from a test embedding
-        test_vec = _ollama_embed_text(args.ollama_model, "test")
-        hidden_size = test_vec.shape[0]
-        print(f"  Ollama model ready  |  Hidden size: {hidden_size}")
-    else:
-        # load model
-        tokenizer, model, is_decoder_only = load_model_and_tokenizer(
-            args.model, args.hf_token, args.llama_path
-        )
-        device      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        hidden_size = model.config.hidden_size
-        model.to(device)
-        model.eval()
-        print(f"  Device: {device}  |  Hidden size: {hidden_size}")
+    tokenizer, model, is_decoder_only = load_model_and_tokenizer(
+        args.model, args.hf_token
+    )
+    device      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    hidden_size = model.config.hidden_size
+    model.to(device)
+    model.eval()
+    print(f"  Device: {device}  |  Hidden size: {hidden_size}")
 
     # load speeches
     df = load_speeches()
@@ -595,19 +530,17 @@ def main() -> None:
 
     if args.truncation == "512":
         print("\n[512-token truncation]")
-        if ollama_mode:
-            cls_matrix, mean_matrix = embed_ollama_512(df, args.ollama_model)
-        else:
-            cls_matrix, mean_matrix = embed_512(df, tokenizer, model, device, is_decoder_only)
+        cls_matrix, mean_matrix = embed_512(df, tokenizer, model, device, is_decoder_only)
     else:
         print("\n[Full-speech chunk-and-average]")
-        if ollama_mode:
-            cls_matrix, mean_matrix = embed_ollama_full(df, args.ollama_model)
-        else:
-            cls_matrix, mean_matrix = embed_full(df, tokenizer, model, device, is_decoder_only, hidden_size)
+        cls_matrix, mean_matrix = embed_full(df, tokenizer, model, device, is_decoder_only, hidden_size)
+
+    # allow explicit opt-out via --train-cutoff none
+    train_cutoff = None if args.train_cutoff.lower() == "none" else args.train_cutoff
 
     print("\nSaving outputs …")
-    save_outputs(df, available_meta, cls_matrix, mean_matrix, args.truncation, args.model, out_dir)
+    save_outputs(df, available_meta, cls_matrix, mean_matrix, args.truncation, args.model, out_dir,
+                 train_cutoff=train_cutoff, skip_pca=args.no_pca)
 
     print("\nDone.")
 
