@@ -54,19 +54,13 @@
 
 
 #### minna's todos:
-- add prepare-presentation
 - check if gdp predicts 12 months or 4 years
-- ( kafka embeddings )
-- try with different macro aggregation methods
 - shorten to only include macro data as of 2023 
 
-#### anna's todo:
-- finish anna/tft
-- adds FOMC 
 
-#### chris todo:
-- shuffle PCAs for embeddings
-- darts implementation
+## chris
+- kafka embeddings 
+
 
 
 <!-- - max_pred 1 quarter in advance (for gdp or cpi both?) -->
