@@ -335,6 +335,12 @@ class DataFrameBuilder:
     # trim leading NaNs
     df = df.dropna(subset=['GBP_mean']).reset_index(drop=True)
 
+    # trim after creation to only include same timeframe as speeches
+    # speeches available from: 1986-01-06 to 2023-12-11
+    # since its monthly
+    df = df.loc[(df['date'] >= '1986-01-01')
+                     & (df['date'] <= '2023-12-11')]
+                     
     print(f"\nMonthly Date range: {df['date'].min()} to {df['date'].max()}, {len(df)} rows")    
     # print(df.head(10))
     return df
