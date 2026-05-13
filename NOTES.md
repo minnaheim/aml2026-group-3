@@ -3,6 +3,7 @@
 ## TO DO
 ### DATA
 - [ ] Get more variables with long time series dimension from FRED etc.
+- Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th). 
 
 ### EMBEDDINGS
 - [ ] Test different methods => be creative
