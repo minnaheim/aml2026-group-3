@@ -139,9 +139,16 @@ def main():
         help="Compute device for TFT (default: cpu)",
     )
     parser.add_argument(
-        "--embedding", default=None, choices=["fomc-roberta"],
+        "--embedding", default=None,
+        choices=["fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", "roberta", "llama3.1"],
         help="Speech embedding to include (default: none — macro-only mode)",
     )
+    
+    parser.add_argument(
+        "--aggregation", default="mean", choices=["mean", "decay", "attention"],
+        help="Speech aggregation strategy (default: mean)",
+    )
+    
     args = parser.parse_args()
 
     # make sure that there is no sneaky cuda being used 
