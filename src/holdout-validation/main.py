@@ -25,7 +25,7 @@ from benchmark_runner    import ARRunner, ARIMARunner
 from tft_runner          import TFTRunner
 from embedding_manager   import EmbeddingManager
 
-MAIN_TARGETS = ["CPI", "UNRATE", "GDP"]
+MAIN_TARGETS = ["CPI", "UNRATE", "GDP" ]
 ALL_TARGETS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 
 # --- weights and biases logging ------------------------
@@ -59,28 +59,40 @@ def compute_metrics(df: pd.DataFrame) -> dict:
 
 # ── save ─────────────────────────────────────────────────────────────────────
 
-# TODO: change here to sort by target
 def save_results(results: dict, out_dir: Path) -> pd.DataFrame:
+    """Save per-fold CSVs + per-fold metrics + fold-averaged metrics."""
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
-    for model, model_res in results.items():
-        for target, df in model_res.items():
-            df.to_csv(out_dir / f"{model.lower()}_{target.lower()}_predictions.csv", index=False)
-            m = compute_metrics(df)
-            rows.append({"model": model, "target": target, **m})
+    for model, fold_res in results.items():
+        for fold, target_res in fold_res.items():
+            for target, df in target_res.items():
+                df.to_csv(out_dir / f"{model.lower()}_{target.lower()}_fold{fold}_predictions.csv", index=False)
+                m = compute_metrics(df)
+                rows.append({"model": model, "fold": fold, "target": target, **m})
 
-    metrics_df = pd.DataFrame(rows)[["model", "target", "MAE", "RMSE", "MAPE"]]
-    metrics_df = metrics_df.sort_values(by=["target", "model"]).reset_index(drop=True)
-    metrics_df.to_csv(out_dir / "metrics.csv", index=False)
-    print("\n=== Evaluation Metrics ===")
+    metrics_df = pd.DataFrame(rows)[["model", "fold", "target", "MAE", "RMSE", "MAPE"]]
+    metrics_df = metrics_df.sort_values(by=["target", "model", "fold"]).reset_index(drop=True)
+    metrics_df.to_csv(out_dir / "metrics_per_fold.csv", index=False)
+
+    avg_df = (
+        metrics_df.groupby(["model", "target"])[["MAE", "RMSE", "MAPE"]]
+        .mean().round(4).reset_index()
+        .sort_values(by=["target", "model"]).reset_index(drop=True)
+    )
+    avg_df.to_csv(out_dir / "metrics.csv", index=False)
+
+    print("\n=== Evaluation Metrics (per fold) ===")
     print(metrics_df.to_string(index=False))
-    return metrics_df
+    print("\n=== Evaluation Metrics (averaged across folds) ===")
+    print(avg_df.to_string(index=False))
+    return avg_df
 
 
 # ── plot ──────────────────────────────────────────────────────────────────────
 
 def plot_results(results: dict, out_dir: Path):
-    targets = sorted({t for res in results.values() for t in res})
+    # collect all targets across all folds
+    targets = sorted({t for fold_res in results.values() for tr in fold_res.values() for t in tr})
     _, axes = plt.subplots(len(targets), 1, figsize=(14, 4 * len(targets)), squeeze=False)
 
     colors     = {"AR": "crimson", "ARIMA": "darkorange", "TFT": "steelblue"}
@@ -90,10 +102,12 @@ def plot_results(results: dict, out_dir: Path):
         ax = axes[i][0]
         actual_drawn = False
 
-        for model, model_res in results.items():
-            if target not in model_res:
+        for model, fold_res in results.items():
+            # concatenate predictions across folds (non-overlapping windows → one continuous series)
+            dfs = [fold_res[f][target] for f in sorted(fold_res) if target in fold_res[f]]
+            if not dfs:
                 continue
-            df = model_res[target].dropna(subset=["actual", "predicted"])
+            df = pd.concat(dfs).sort_values("date").dropna(subset=["actual", "predicted"])
 
             if not actual_drawn:
                 ax.plot(df["date"], df["actual"],
@@ -149,6 +163,10 @@ def main():
         help="Speech aggregation strategy (default: mean)",
     )
     
+    parser.add_argument(
+        "--horizon", type=int, default=12, choices=[1, 6, 9, 12],
+        help="Forecast horizon in months (default: 12)",
+    )
     args = parser.parse_args()
 
     # make sure that there is no sneaky cuda being used 
@@ -164,6 +182,7 @@ def main():
     print(f"Targets   : {args.targets}")
     print(f"Device    : {args.device}")
     print(f"Embedding : {args.embedding or 'none'}")
+    print(f"Horizon   : {args.horizon}")
     print(f"W&B       : {args.wandb}")
     print(f"Output    : {out_dir}\n")
 
@@ -191,52 +210,56 @@ def main():
         f"Holdout : [{holdout['date'].min().date()} – {holdout['date'].max().date()}] "
         f"({len(holdout)} rows)\n"
     )
-    # initiate both runners
-    ar_runner  = ARRunner(dfb)
-    arima_runner  = ARIMARunner(dfb)
-    tft_runner = TFTRunner(dfb)
+    # initiate runners
+    ar_runner    = ARRunner(dfb)
+    arima_runner = ARIMARunner(dfb)
+    tft_runner   = TFTRunner(dfb)
 
-    results: dict[str, dict[str, pd.DataFrame]] = {"AR": {}, "ARIMA": {}, "TFT": {}}
+    # results[model][fold_num][target] = predictions DataFrame
+    results: dict[str, dict[int, dict[str, pd.DataFrame]]] = {
+        "AR":    {s["fold"]: {} for s in splits},
+        "ARIMA": {s["fold"]: {} for s in splits},
+        "TFT":   {s["fold"]: {} for s in splits},
+    }
 
-    # ── 2. let benchmark and tft run ─────────────────────────────────────────
-    for target in args.targets:
-        print(f"\n{'─' * 55}")
-        print(f" Target: {target}")
-        print(f"{'─' * 55}")
+    # ── 2. run all models for each fold × target ──────────────────────────────
+    for fold_idx, s in enumerate(splits):
+        fold_num = s["fold"]
+        for target in args.targets:
+            print(f"\n{'─' * 55}")
+            print(f" Fold {fold_num} | Target: {target}")
+            print(f"{'─' * 55}")
 
-        print("\n[AR(1)]")
-        ar_runner.run(splits, target=target, fold=0)
-        ar_df = ar_runner.predict(splits, target=target, fold=0)
-        results["AR"][target] = ar_df
-        print(f"  → {len(ar_df)} predictions")
+            print("\n[AR]")
+            ar_order, ar_seasonal = ar_runner.run(splits, target=target, fold=fold_idx)
+            ar_df = ar_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
+            results["AR"][fold_num][target] = ar_df
+            print(f"  → {len(ar_df)} predictions (order={ar_order}, seasonal={ar_seasonal})")
 
+            print("\n[ARIMA]")
+            arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=fold_idx)
+            arima_df = arima_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
+            results["ARIMA"][fold_num][target] = arima_df
+            print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
-        # add arima order for each variable
-        print("\n[ARIMA]")
-        arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=0)
-        arima_df = arima_runner.predict(splits, target=target, fold=0)
-        results["ARIMA"][target] = arima_df
-        print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
+            print("\n[TFT – training]")
+            ckpt = tft_runner.run(
+                splits, target=target, fold=fold_idx,
+                use_wandb=args.wandb, device=args.device,
+            )
+            print(f"  → best checkpoint: {ckpt}")
 
-        print("\n[TFT – training]")
-        ckpt = tft_runner.run(
-            splits, target=target, fold=0,
-            use_wandb=args.wandb, device=args.device,
-        )
-        print(f"  → best checkpoint: {ckpt}")
+            # print("\n[TFT – interpretation]")
+            # interpretation = tft_runner.interpret_output()
+            # print(f"interpretation: {interpretation}")
 
-        # plot the vars that contribute most
-        print("\n[TFT – interpretation]")
-        interpretation = tft_runner.interpret_output(out_dir)
-        print(f"interpretation: {interpretation}")
-
-
-        print("\n[TFT – inference]")
-        tft_df = tft_runner.predict(
-            ckpt, splits, target=target, fold=0, device=args.device,
-        )
-        results["TFT"][target] = tft_df
-        print(f"  → {len(tft_df)} predictions")
+            print("\n[TFT – inference]")
+            tft_df = tft_runner.predict(
+                ckpt, splits, target=target, fold=fold_idx, device=args.device,
+                step=args.horizon, # includes horizon
+            )
+            results["TFT"][fold_num][target] = tft_df
+            print(f"  → {len(tft_df)} predictions")
 
     # ── 3. save predictions vs. actuals, calculate eval metrics ──────────────
     save_results(results, out_dir)

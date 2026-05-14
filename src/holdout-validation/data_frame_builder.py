@@ -34,7 +34,7 @@ class DataFrameBuilder:
       self.path = os.getcwd()
     else:
        self.path = path
-    self.N_FOLDS = 1 # holdout cv
+    self.N_FOLDS = 3 # holdout cv
     self.FINAL_HOLDOUT = 12 # 12 months = 1 year
     # data without holdout
     self.TRAIN_DEC = 0.8
@@ -432,15 +432,18 @@ class DataFrameBuilder:
      # first remove final holdout, not part of cv!
     df_holdout = df.iloc[-self.FINAL_HOLDOUT:].reset_index(drop=True)
 
+    # divide df_cv into (N_FOLDS + 1) equal blocks; each fold uses one block as test,
+    # all preceding blocks as training — standard expanding-window CV
+    n = len(df_cv)
+    test_size = n // (self.N_FOLDS + 1)
     splits = []
-    # rolling window cv
     for i in range(self.N_FOLDS):
-        train_end = (i + 1) * int(len(df_cv)*self.TRAIN_DEC)
-        test_end = train_end + int(len(df_cv)*(1-self.TRAIN_DEC))
+        train_end = (i + 1) * test_size
+        test_end  = min(train_end + test_size, n)
         splits.append({
             "fold": i + 1,
             "train": df_cv.iloc[:train_end],
-            "test": df_cv.iloc[train_end:test_end],
+            "test":  df_cv.iloc[train_end:test_end],
         })
 
     return splits, df_holdout
@@ -516,7 +519,7 @@ class DataFrameBuilder:
 
   def get_data(self, splits, train: bool= True,  model: str = "TFT", target: str = "CPI", fold = 0):
     """
-    fold   : 1 fold only atm
+    fold   : 0-based index into splits
     train  : True → training split, False → test split
     model  : "AR" or "ARIMA" → univariate series resampled to native frequency
              "TFT"           → full daily dataframe
