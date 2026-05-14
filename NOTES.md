@@ -3,15 +3,22 @@
 ## TO DO
 ### DATA
 - [ ] Get more variables with long time series dimension from FRED etc.
-- Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th). 
+- [ ] Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th). 
 
 ### EMBEDDINGS
 - [x] Test different methods => be creative
 - [x] PCA should be fitted until 2011-01-01 or so only (so until the end of the very first tft training data)
-  - so for pre-2011 speeches, use fit_transform
-  - for everything later, use transform only
-  - RERUN: Implement in data_frame_builder and rerun with cutoff on 2011-01-01 => i mistakenly ran it with cutoff 2014-01-01
+- [x] Weight aggregation:
+  - [x] mean and std
+  - [x] exponentially decaying weights
+  - [ ] attention (just one layer): once on full training, once including macro state, so somewhat 'context aware' => include description in PREPARE_PRESENTATION
+  - [ ] Voter rights are included in model, what about encoding of position within Fed? (So Chair = highest rank, then Governor, then President?)
 - [ ] **Normalize PCA**: probably necessary! if it were to dramatically decrease performance, ask David
+- [ ] Do alternative dimensionality reductions (WIP)
+  - [ ] PCA number of components => should be hyperparameter
+  - [ ] No dimensionality reduction
+  - [ ] Factor analysis?
+- [ ] Also run using the 512 mean and CLS versions, not just full speeches   
       
 ### TFT
 - [ ] Additional metadata from FRED
