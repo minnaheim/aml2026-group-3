@@ -145,7 +145,7 @@ def main():
     )
     
     parser.add_argument(
-        "--aggregation", default="mean", choices=["mean", "decay", "attention"],
+        "--aggregation", default="mean", choices=["mean", "decay", "attention", "context_attention"],
         help="Speech aggregation strategy (default: mean)",
     )
     
@@ -170,14 +170,14 @@ def main():
     # ── 1. split the data acc. to data-frame-builder ─────────────────────────
     # dissents are loaded explicitly so those features appear in process_data()
     # regardless of whether embeddings are used
-    dfb = DataFrameBuilder(str(root))
+    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation)
     dfb.load_fomc_dissent()
     df  = dfb.process_data()
     splits, holdout = dfb.generate_split(df)
 
-    if args.embedding == "fomc-roberta":
+    if args.embedding is not None: # allow for different models!
         # re-fit PCA per fold on training speeches only — no look-ahead leakage
-        emb = EmbeddingManager(str(root)).load()
+        emb = EmbeddingManager(str(root), embedding=args.embedding).load()
         splits = dfb.add_leakage_free_embeddings(splits, emb)
 
     for s in splits:
