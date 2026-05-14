@@ -30,9 +30,14 @@ _META_COLS = [
 ]
 
 # path to the pre-PCA full embeddings, relative to project root
-_FULL_EMB_SUBPATH = (
-    "data/embeddings/fomc-roberta/embeddings_full_mean_full_fomc-roberta.csv.zip"
-)
+_EMBEDDING_PATHS = {
+    "fomc-roberta":       "data/embeddings/fomc-roberta/embeddings_full_mean_full_fomc-roberta.csv.zip",
+    "fomc-roberta-kafka": "data/embeddings/fomc-roberta-kafka/embeddings_full_mean_full_fomc-roberta.csv.zip",
+    "finbert":            "data/embeddings/finbert/embeddings_full_mean_full_finbert.csv.zip",
+    "finbert-kafka":      "data/embeddings/finbert-kafka/embeddings_full_mean_full_finbert.csv.zip",
+    "roberta":            "data/embeddings/roberta/embeddings_full_mean_full_roberta.csv.zip",
+    "llama3.1":           "data/embeddings/llama3.1/embeddings_full_mean_512_llama3.1.csv.zip",
+}
 
 
 class EmbeddingManager:
@@ -55,9 +60,10 @@ class EmbeddingManager:
         pca_0 … pca_{n_pca-1} columns for use in DataFrameBuilder.
     """
 
-    def __init__(self, path: str, n_pca: int = N_PCA):
+    def __init__(self, path: str, n_pca: int = N_PCA, embedding: str = "fomc-roberta"):
         self.path   = Path(path)
         self.n_pca  = n_pca
+        self.embedding = embedding
         self.full_df:  pd.DataFrame | None = None
         self.emb_cols: list[str]           = []
         self._splits:  list[dict] | None   = None  # set by generate_split()
@@ -65,13 +71,13 @@ class EmbeddingManager:
     # ------------------------------------------------------------------
     def load(self) -> "EmbeddingManager":
         """Load the full (pre-PCA) mean embeddings for FOMC-RoBERTa."""
-        p = self.path / _FULL_EMB_SUBPATH
+        subpath = _EMBEDDING_PATHS.get(self.embedding)
+        if subpath is None:
+            raise ValueError(f"Unknown embedding: {self.embedding}. Choose from {list(_EMBEDDING_PATHS)}")
+        p = self.path / subpath
         if not p.exists():
-            raise FileNotFoundError(
-                f"Full embeddings not found: {p}\n"
-                "Run: python src/embeddings_pipeline.py "
-                "--model fomc-roberta --truncation full"
-            )
+            raise FileNotFoundError(f"Full embeddings not found: {p}")
+        
         df = pd.read_csv(p, compression="zip", parse_dates=["Date"])
         df = df.sort_values("Date").reset_index(drop=True)
         self.full_df  = df
