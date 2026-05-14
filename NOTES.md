@@ -33,18 +33,21 @@
 ## minna:
 - [x] multiple folds
 - [ ] hyperparam tuning (with nested cv) -> chris
+- [ ] merge anna's changes (from main to mine)
+- [ ] add chris' embeddings
+- [ ] check out diff with chris pipeline to mine
 - [ ] why are the predictions always linear? look at AR weight matrices
+- [x] ar process adjustment 
 
 
 ## chris
-- [ ] 512 and full embeddings 
-- [ ] kafka embeddings 
+- [x] 512 and full embeddings 
+- [x] kafka embeddings 
 - [ ] adds what he did on hyperparam tuning
 
 
 ## anna
 - [ ] trying no dim. reduction, diff. reduction, pca-with differeing, factor analysis 
-- [ ] ar process adjustment 
 - [ ] alignment via attention 
 - [ ] use the growth rates instead of level
 
