@@ -14,6 +14,9 @@ SPEECH_WINDOW_MONTHS = 12
 DECAY_LAMBDA = 0.01  # higher = faster decay (more recent speeches dominate)
 VOTER_WEIGHT = 2.0  # voters get twice the weight of non-voters
 
+# all speaker columns we have
+SPEAKER_COLS = ['is_voter', 'is_chair', 'female', 'minority', 'Date']
+
 class DataFrameBuilder:
 
   # include district mapping of board and all regional districts
@@ -222,10 +225,10 @@ class DataFrameBuilder:
           (self.speeches_df["Date"] >= window_start)
           & (self.speeches_df["Date"] < quarter_start)
       )
-      sub = self.speeches_df.loc[mask, self.pca_cols + ['is_voter', 'Date']] # keep the is voter coulmn here # also tge date column for the exponential decay
+      sub = self.speeches_df.loc[mask, self.pca_cols + SPEAKER_COLS] # keep the is voter coulmn here # also tge date column for the exponential decay
       if len(sub) == 0:
           sub = self.speeches_df.loc[
-              self.speeches_df["Date"] < quarter_start, self.pca_cols + ['is_voter', 'Date']
+              self.speeches_df["Date"] < quarter_start, self.pca_cols + SPEAKER_COLS
           ]
       res = {}
 
@@ -233,6 +236,9 @@ class DataFrameBuilder:
           # new feautre: how many speeches were held be voters?
           # fixed here by moving outside loop
           res['voter_speech_ratio'] = float(sub['is_voter'].mean()) 
+          res['chair_speech_ratio']      = float(sub['is_chair'].mean())
+          res['female_speaker_ratio']  = float(sub['female'].mean())
+          res['minority_speaker_ratio']= float(sub['minority'].mean())
           
           # compute weights based on strategy
           if self.aggregation == "mean":
@@ -276,6 +282,9 @@ class DataFrameBuilder:
         
       else: 
           res['voter_speech_ratio'] = 0.0
+          res['chair_speech_ratio']  = 0.0
+          res['female_speaker_ratio']  = 0.0
+          res['minority_speaker_ratio']= 0.0
           for col in self.pca_cols:
               res[f"{col}_mean"] = 0.0
               res[f"{col}_std"] = 0.0
@@ -483,6 +492,9 @@ class DataFrameBuilder:
             if "CentralBank" in speeches_df.columns:
                 speeches_df["District"] = speeches_df["CentralBank"].map(self.DISTRICT_MAPPING)
             speeches_df["is_voter"] = speeches_df.apply(self._is_voter, axis=1)
+            # check if speaker is chair
+            speeches_df["is_chair"] = (speeches_df["Role"].str.lower().str.contains("chair", na=False) & 
+                                       ~speeches_df["Role"].str.lower().str.contains("vice", na=False)).astype(int)
 
             self.speeches_df = speeches_df
             # raw column names from speeches_df (pca_0, pca_1, ...)
