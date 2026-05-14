@@ -7,6 +7,10 @@ from pathlib import Path
 # when aggregating speeches into a single feature vector per quarter
 SPEECH_WINDOW_MONTHS = 12
 
+# speech weighting
+DECAY_LAMBDA = 0.01  # higher = faster decay (more recent speeches dominate)
+VOTER_WEIGHT = 2.0  # voters get twice the weight of non-voters
+
 class DataFrameBuilder:
 
   # include district mapping of board and all regional districts
@@ -22,7 +26,7 @@ class DataFrameBuilder:
         "Federal Reserve Bank of Dallas": "DAL", "Federal Reserve Bank of San Francisco": "SF"
     }  
 
-  def __init__(self, path: str | None = None):
+  def __init__(self, path: str | None = None, aggregation = 'mean'):
     if path is None:
       self.path = os.getcwd()
     else:
@@ -42,7 +46,11 @@ class DataFrameBuilder:
     # populated by add_leakage_free_embeddings(); None means speeches not loaded.
     self.speeches_df: pd.DataFrame | None = None
     self.pca_cols: list[str] = []
-
+    
+    # add which type of aggregation we want for the speech embeddings
+    self.aggregation = aggregation
+    # fallback is 'mean'
+    # other options will be: exponential decay; attention-based
 
   # helper to clean initial macro df, same across all frequencies
   def _read_rename_date(self, freq_path):
@@ -187,18 +195,25 @@ class DataFrameBuilder:
 
 
   def _aggregate_speeches_for_month(self, quarter_start: pd.Timestamp) -> dict[str, float]:
-      """Mean PCA vector for speeches in the rolling window before *month_start*.
-
-      Window: [quarter_start - SPEECH_WINDOW_QUARTERS quarters, quarter_start).
+      """Weighted PCA vector for speeches in the rolling window before *month_start*.
+      Weights combine:
+      
+      Aggregation strategies (controlled by self.aggregation):
+      - 'mean':      plain unweighted mean (baseline)
+      - 'decay':     exponential decay by recency, w = exp(-lambda * days_before)
+      - 'attention': learned weights (TODO)
+      
+      Window: [quarter_start - SPEECH_WINDOW_MONTHS, quarter_start).
       Falls back to any speech before quarter_start if the window is empty.
       """
+      
       assert self.speeches_df is not None
       window_start = quarter_start - pd.DateOffset(months=SPEECH_WINDOW_MONTHS)
       mask = (
           (self.speeches_df["Date"] >= window_start)
           & (self.speeches_df["Date"] < quarter_start)
       )
-      sub = self.speeches_df.loc[mask, self.pca_cols + ['is_voter']] # keep the is voter coulmn here
+      sub = self.speeches_df.loc[mask, self.pca_cols + ['is_voter', 'Date']] # keep the is voter coulmn here # also tge date column for the exponential decay
       if len(sub) == 0:
           sub = self.speeches_df.loc[
               self.speeches_df["Date"] < quarter_start, self.pca_cols + ['is_voter']
@@ -209,9 +224,26 @@ class DataFrameBuilder:
           # new feautre: how many speeches were held be voters?
           # fixed here by moving outside loop
           res['voter_speech_ratio'] = float(sub['is_voter'].mean()) 
+          
+          # compute weights based on strategy
+          if self.aggregation == "mean":
+            weights = np.ones(len(sub))
+
+          elif self.aggregation == "decay":
+            days_before = (quarter_start - sub['Date']).dt.days.clip(lower=0)
+            weights = np.exp(-DECAY_LAMBDA * days_before.values)
+
+          elif self.aggregation == "attention":
+            # TODO: implement learned attention weights (!!!!!!!)
+            raise NotImplementedError("Attention aggregation not yet implemented")
+        
+          # normalize weights
+          weights = weights / weights.sum()
+          
           for col in self.pca_cols: 
-              res[f"{col}_mean"] = float(sub[col].mean()) 
-              res[f"{col}_std"] = float(sub[col].std()) if len(sub) > 1 else 0.0
+              weighted_mean = float(np.dot(weights, sub[col].values))
+              res[f"{col}_mean"] = weighted_mean
+              res[f"{col}_std"]  = float(np.sqrt(np.dot(weights, (sub[col].values - weighted_mean) ** 2))) if len(sub) > 1 else 0.0
       else: 
           res['voter_speech_ratio'] = 0.0
           for col in self.pca_cols:
