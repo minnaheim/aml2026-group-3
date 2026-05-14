@@ -6,8 +6,8 @@
 - Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th). 
 
 ### EMBEDDINGS
-- [ ] Test different methods => be creative
-- [ ] PCA should be fitted until 2011-01-01 or so only (so until the end of the very first tft training data)
+- [x] Test different methods => be creative
+- [x] PCA should be fitted until 2011-01-01 or so only (so until the end of the very first tft training data)
   - so for pre-2011 speeches, use fit_transform
   - for everything later, use transform only
   - RERUN: Implement in data_frame_builder and rerun with cutoff on 2011-01-01 => i mistakenly ran it with cutoff 2014-01-01
@@ -15,18 +15,24 @@
       
 ### TFT
 - [ ] Additional metadata from FRED
-- [ ] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
+- [x] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
+- [ ] Hyperparameter tuning (WIP)
 
 ### BENCHMARKS
 - [x] Get AR(p) process running
 
 ### EVAL METRICS
-- [ ] For AR / ARIMA: expanding / rolling window
-- [ ] For TFT: one-holdout
+- [x] For AR / ARIMA: expanding / rolling window
+- [x] For TFT: one-holdout
+  - switched to 3-fold
 
 
 ### CV PIPELINE
-- [ ] Get up and running!! (WIP)
+- [x] Get up and running!!
+
+### ABLATION
+- [ ] Perform proper study
+  - Only once we are done with everything else! Code is there already
 
 ## Decisions
 ### Data Sources
