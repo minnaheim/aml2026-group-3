@@ -9,7 +9,8 @@ import json
 
 # mirrors AR-benchmark.py: CPI/PAYEMS/INDPRO/GDP are log-differenced before fitting
 # UNRATE is mean-reverting in practice and is kept in levels
-LOG_DIFF_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"} # log, then diff?
+
+#ANNA#LOG_DIFF_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"} # log, then diff?
 
 
 # ---------------------------------------------------------------------------
@@ -19,34 +20,6 @@ class ARRunner:
     def __init__(self, dfb):
         self.dfb = dfb
 
-    # only needed internally
-    def _transform(self, series: pd.Series, target: str):
-        """Apply the same transform as AR-benchmark.py."""
-        if target in LOG_DIFF_TARGETS:
-            # test if we really need both
-            log = np.log(series)
-            log_diff = log.diff().dropna()
-            # print(f"just log adf test: {adfuller(log)[1]}")
-            # claude says the reason its stationary here but not when differentiating is due to misspecification of adfuller, regression='c' should be 'ct' tho.
-            # print(f"log & diff adf test: {adfuller(log_diff)[1]}")
-            # here, we have structural breaks in CPI, since such long time frame.
-            return np.log(series).diff().dropna(), "log_diff"
-        return series.copy(), "levels"  # UNRATE: already stationary in levels
-
-    def _invert(self, forecast: np.ndarray, last_val: float, transform: str) -> np.ndarray:
-        """Invert transform to get forecasts back in original units."""
-        if transform == "log_diff":
-            # mirrors invert_transform(..., is_log=True) in AR-benchmark.py
-            return np.exp(np.log(last_val) + np.cumsum(forecast))
-        return forecast  # levels: SARIMAX forecast is already in original units
-
-
-    # def _fetch_data(self, splits, target: str = "CPI", fold: int = 0):
-    #     train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
-    #     test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
-    #     return train, test
-
-
     def run(self, splits, target: str = "CPI", fold: int = 0):
         train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
 
@@ -55,9 +28,11 @@ class ARRunner:
 
         # TODO: is it a problem that we transform both separately??
         # transform both to stationarity if needed
-        stationary, transform = self._transform(series, target)
+        #stationary, transform = self._transform(series, target)
+        stationary = series.dropna()
+        print(f"[AR | {target}] n_train={len(stationary)}")
 
-        print(f"[AR | {target}] transform={transform}, n_train={len(stationary)}")
+        #print(f"[AR | {target}] transform={transform}, n_train={len(stationary)}")
 
         # fixed AR(1) — same spec as AR-benchmark.py: SARIMAX(1,0,0)
         model = SARIMAX(
@@ -69,8 +44,6 @@ class ARRunner:
             enforce_invertibility=False,
         )
         self._fit            = model.fit(maxiter=1000, disp=False)
-        self._last_train_val = series.iloc[-1]
-        self._transform_type = transform
         return self._fit
 
         # step = 12 because MAX_ENCODER_LENGTH
@@ -92,14 +65,11 @@ class ARRunner:
             # drop duplicate dates at the train/test boundary (can happen when split doesn't fall on a quarter boundary)
             context_raw    = pred_context.drop_duplicates(subset="date", keep="last")
             context_series = context_raw.set_index("date")[target]
-            stationary_ctx, _ = self._transform(context_series, target)
 
             # expanding context mirrors TFT: same fixed params (from run()), but encoder sees more predicted data
             # .apply() keeps the fitted params from run(), no refit
-            ctx_result   = self._fit.apply(stationary_ctx.asfreq(freq))
-            forecast_raw = ctx_result.get_forecast(steps=window_size).predicted_mean.values
-            # transform back to non-log; anchor on last raw value of context (not just train)
-            forecast     = self._invert(forecast_raw, context_series.iloc[-1], self._transform_type)
+            ctx_result   = self._fit.apply(context_series.asfreq(freq))
+            forecast = ctx_result.get_forecast(steps=window_size).predicted_mean.values
 
             # append own predictions (not actuals) to context for next window
             pred_rows    = pd.DataFrame({"date": test_window["date"].values, target: forecast})
@@ -140,17 +110,6 @@ class ARIMARunner:
     def _save_orders(self, key: str, orders: dict) -> None:
         json.dump(orders, open(self._cache_path(key), "w"), indent=2)
         
-    # transform helpers for differenced and log variables
-    def _transform(self, series: pd.Series, target: str) -> tuple[pd.Series, str]:
-        if target in LOG_DIFF_TARGETS:
-            return np.log(series).diff().dropna(), "log_diff"
-        return series.copy(), "levels"
-
-    def _invert(self, forecast: np.ndarray, last_val: float, transform: str) -> np.ndarray:
-        if transform == "log_diff":
-            return np.exp(np.log(last_val) + np.cumsum(forecast))
-        return forecast
-
     # order selection
     def _find_order(
         self,
@@ -199,7 +158,7 @@ class ARIMARunner:
 
         freq   = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
         series = train.set_index("date")[target]
-        stationary, transform = self._transform(series, target)
+        stationary = series.dropna()
 
         # use end of training data as selection window for order search
         selection_end = series.index.max()
@@ -225,11 +184,9 @@ class ARIMARunner:
             enforce_invertibility=False,
         )
         self._fit            = model.fit(maxiter=250, disp=False)
-        self._last_train_val = series.iloc[-1]
-        self._transform_type = transform
 
         print(f"[ARIMA | {target}] order={order}, seasonal={seasonal_order}, "
-              f"transform={transform}, n_train={len(stationary)}")
+              f"n_train={len(stationary)}")
 
         return order, seasonal_order
 
@@ -252,14 +209,11 @@ class ARIMARunner:
             # drop duplicate dates at the train/test boundary (can happen when split doesn't fall on a quarter boundary)
             context_raw    = pred_context.drop_duplicates(subset="date", keep="last")
             context_series = context_raw.set_index("date")[target]
-            stationary_ctx, _ = self._transform(context_series, target)
 
             # expanding context mirrors TFT: same fixed params (from run()), but model sees more predicted data
             # .apply() keeps the fitted params from run(), no refit
-            ctx_result   = self._fit.apply(stationary_ctx.asfreq(freq))
-            forecast_raw = ctx_result.get_forecast(steps=window_size).predicted_mean.values
-            # transform back to non-log; anchor on last raw value of context (not just train)
-            forecast     = self._invert(forecast_raw, context_series.iloc[-1], self._transform_type)
+            ctx_result   = self._fit.apply(context_series.asfreq(freq))
+            forecast = ctx_result.get_forecast(steps=window_size).predicted_mean.values
 
             # append own predictions (not actuals) to context for next window
             pred_rows    = pd.DataFrame({"date": test_window["date"].values, target: forecast})

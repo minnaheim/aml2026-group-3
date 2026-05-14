@@ -32,7 +32,8 @@ class DataFrameBuilder:
     # data without holdout
     self.TRAIN_DEC = 0.8
     self.TARGET_COLS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
-    self.QUARTERLY_TARGETS = {"GDP"} # quarterly frequency
+    self.QUARTERLY_TARGETS = {"GDP"} # quarterly frequency => IMPORTANT CHANGE: since we now have growth rates, 
+    # I will divide the rate by 3 so that each value get's a third of the growth rate
     self.MONTHLY_TARGETS   = {"CPI", "PAYEMS", "INDPRO", "UNRATE"}
 
     # add fomc dissents
@@ -319,8 +320,9 @@ class DataFrameBuilder:
 
     df = pd.merge(df, df_daily_m, on='date', how='left')
 
-    # forward-fill quarterly vars (GDP)
-    df[self.TARGET_COLS] = df[self.TARGET_COLS].ffill()
+    # forward-fill quarterly vars (GDP) => also divide by 3 since we want the monthly growth rate (assuming growth is stable)
+    df[list(self.QUARTERLY_TARGETS)] = df[list(self.QUARTERLY_TARGETS)].ffill()
+    df[list(self.QUARTERLY_TARGETS)] = df[list(self.QUARTERLY_TARGETS)] / 3
 
     # make 5-day daily vars (GBP, YEN) 0 on weekends/missing instead of NaN
     daily_cols = [c for c in df.columns if c.startswith(("GBP_", "YEN_"))]

@@ -19,7 +19,7 @@ MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP",
 LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 LAG_PERIODS = [1, 2, 6, 12]
 # same set as benchmark_runner.LOG_DIFF_TARGETS — log only, no differencing for now
-LOG_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"}
+#ANNA# LOG_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"}
 
 
 class TFTRunner:
@@ -53,9 +53,9 @@ class TFTRunner:
             on='date',
         )
 
-        # log-transform skewed macro vars before lag computation so lags are also in log space
-        log_cols = [c for c in LOG_TARGETS if c in df.columns]
-        df[log_cols] = np.log(df[log_cols])
+        #ANNA # log-transform skewed macro vars before lag computation so lags are also in log space
+        # log_cols = [c for c in LOG_TARGETS if c in df.columns]
+        # df[log_cols] = np.log(df[log_cols])
 
         # calendar features — known in advance
         us_holidays = holidays.US()
@@ -149,7 +149,7 @@ class TFTRunner:
                                       # fomc dates known in advance — only included with speeches
                                       *fomc_known_present],
             time_varying_unknown_reals=[*covariates, *lag_cols, *pca_cols_present, *dissent_cols_present],
-            target_normalizer=EncoderNormalizer(transformation="softplus"),
+            target_normalizer=EncoderNormalizer(transformation=None), # cannot use softplus anymrore since log diff can be negative; None since data SHOULD be mean reverting
             add_relative_time_idx=True,
             add_target_scales=True,
             add_encoder_length=True,
@@ -342,9 +342,9 @@ class TFTRunner:
             for i in range(window_size):
                 row  = test_window.iloc[i]
                 pred = float(preds_np[0, pred_offset + i])
-                # reverse the logging from before
-                if target in LOG_TARGETS:
-                    pred = np.exp(pred)
+                #ANNA # reverse the logging from before
+                # if target in LOG_TARGETS:
+                #     pred = np.exp(pred)
                 # accumulate predictions in original scale for next window's context (no pollution)
                 accumulated_preds[row["date"]] = pred
                 all_rows.append({
