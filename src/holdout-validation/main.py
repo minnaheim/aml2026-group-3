@@ -59,27 +59,39 @@ def compute_metrics(df: pd.DataFrame) -> dict:
 
 # ── save ─────────────────────────────────────────────────────────────────────
 
-def save_results(results: dict, out_dir: Path) -> pd.DataFrame:
+def save_results(results: dict, out_dir: Path, run_name="default", embedding="none", aggregation="mean") -> pd.DataFrame:
     """Save per-fold CSVs + per-fold metrics + fold-averaged metrics."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    # allow to save results from different runs
+    run_dir = out_dir / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    
     rows = []
     for model, fold_res in results.items():
         for fold, target_res in fold_res.items():
             for target, df in target_res.items():
-                df.to_csv(out_dir / f"{model.lower()}_{target.lower()}_fold{fold}_predictions.csv", index=False)
+                df.to_csv(run_dir  / f"{model.lower()}_{target.lower()}_fold{fold}_predictions.csv", index=False)
                 m = compute_metrics(df)
                 rows.append({"model": model, "fold": fold, "target": target, **m})
 
     metrics_df = pd.DataFrame(rows)[["model", "fold", "target", "MAE", "RMSE", "MAPE"]]
     metrics_df = metrics_df.sort_values(by=["target", "model", "fold"]).reset_index(drop=True)
-    metrics_df.to_csv(out_dir / "metrics_per_fold.csv", index=False)
+    metrics_df.to_csv(run_dir  / "metrics_per_fold.csv", index=False)
 
     avg_df = (
         metrics_df.groupby(["model", "target"])[["MAE", "RMSE", "MAPE"]]
         .mean().round(4).reset_index()
         .sort_values(by=["target", "model"]).reset_index(drop=True)
     )
-    avg_df.to_csv(out_dir / "metrics.csv", index=False)
+    # append to master experiments file
+    avg_df["run_name"]    = run_name
+    avg_df["embedding"]   = embedding
+    avg_df["aggregation"] = aggregation
+    avg_df["timestamp"]   = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+    
+    master_path = out_dir / "experiments.csv"
+    
+    avg_df.to_csv(master_path, mode="a", header=not master_path.exists(), index=False)
 
     print("\n=== Evaluation Metrics (per fold) ===")
     print(metrics_df.to_string(index=False))
@@ -90,7 +102,7 @@ def save_results(results: dict, out_dir: Path) -> pd.DataFrame:
 
 # ── plot ──────────────────────────────────────────────────────────────────────
 
-def plot_results(results: dict, out_dir: Path):
+def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
     # collect all targets across all folds
     targets = sorted({t for fold_res in results.values() for tr in fold_res.values() for t in tr})
     _, axes = plt.subplots(len(targets), 1, figsize=(14, 4 * len(targets)), squeeze=False)
@@ -126,7 +138,9 @@ def plot_results(results: dict, out_dir: Path):
         ax.grid(alpha=0.3)
 
     plt.tight_layout()
-    path = out_dir / "predictions_vs_actuals.png"
+    run_dir = out_dir / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / "predictions_vs_actuals.png"
     plt.savefig(path, bbox_inches="tight", dpi=150)
     plt.close()
     print(f"Plot saved → {path}")
@@ -139,6 +153,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="Holdout validation pipeline: AR(1) benchmark vs TFT"
     )
+    
+    # add a parser so that we do not need to rerun baselines all the time haha
+    parser.add_argument(
+        "--no-baselines", action="store_true", default=False,
+        help="Skip AR and ARIMA baselines, only run TFT",
+    )
+    
     parser.add_argument(
         "--targets", nargs="+", default=MAIN_TARGETS,
         choices=MAIN_TARGETS, metavar="TARGET",
@@ -167,6 +188,13 @@ def main():
         "--horizon", type=int, default=12, choices=[1, 6, 9, 12],
         help="Forecast horizon in months (default: 12)",
     )
+    
+    # to save runs individually
+    parser.add_argument(
+        "--run-name", default="default",
+        help="Unique name for this run (used for output subfolder)",
+    )
+    
     args = parser.parse_args()
 
     # make sure that there is no sneaky cuda being used 
@@ -216,11 +244,10 @@ def main():
     tft_runner   = TFTRunner(dfb)
 
     # results[model][fold_num][target] = predictions DataFrame
-    results: dict[str, dict[int, dict[str, pd.DataFrame]]] = {
-        "AR":    {s["fold"]: {} for s in splits},
-        "ARIMA": {s["fold"]: {} for s in splits},
-        "TFT":   {s["fold"]: {} for s in splits},
-    }
+    results = {"TFT": {s["fold"]: {} for s in splits}}
+    if not args.no_baselines:
+        results["AR"]    = {s["fold"]: {} for s in splits}
+        results["ARIMA"] = {s["fold"]: {} for s in splits}
 
     # ── 2. run all models for each fold × target ──────────────────────────────
     for fold_idx, s in enumerate(splits):
@@ -230,17 +257,18 @@ def main():
             print(f" Fold {fold_num} | Target: {target}")
             print(f"{'─' * 55}")
 
-            print("\n[AR]")
-            ar_order, ar_seasonal = ar_runner.run(splits, target=target, fold=fold_idx)
-            ar_df = ar_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
-            results["AR"][fold_num][target] = ar_df
-            print(f"  → {len(ar_df)} predictions (order={ar_order}, seasonal={ar_seasonal})")
+            if not args.no_baselines:
+                print("\n[AR]")
+                ar_order, ar_seasonal = ar_runner.run(splits, target=target, fold=fold_idx)
+                ar_df = ar_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
+                results["AR"][fold_num][target] = ar_df
+                print(f"  → {len(ar_df)} predictions (order={ar_order}, seasonal={ar_seasonal})")
 
-            print("\n[ARIMA]")
-            arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=fold_idx)
-            arima_df = arima_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
-            results["ARIMA"][fold_num][target] = arima_df
-            print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
+                print("\n[ARIMA]")
+                arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=fold_idx)
+                arima_df = arima_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
+                results["ARIMA"][fold_num][target] = arima_df
+                print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
             print("\n[TFT – training]")
             ckpt = tft_runner.run(
@@ -262,10 +290,13 @@ def main():
             print(f"  → {len(tft_df)} predictions")
 
     # ── 3. save predictions vs. actuals, calculate eval metrics ──────────────
-    save_results(results, out_dir)
+    save_results(results, out_dir, 
+             run_name=args.run_name,
+             embedding=args.embedding or "none",
+             aggregation=args.aggregation)
 
     # ── 4. plot results ───────────────────────────────────────────────────────
-    plot_results(results, out_dir)
+    plot_results(results, out_dir, run_name=args.run_name)
 
 
 if __name__ == "__main__":
