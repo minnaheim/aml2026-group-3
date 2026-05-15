@@ -2,8 +2,8 @@
 
 ## TO DO
 ### DATA
-- [ ] Get more variables with long time series dimension from FRED etc.
-- [ ] Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th).
+- [x] Get more variables with long time series dimension from FRED etc.
+- [x] Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th).
 - [ ] Discuss **vintages** with David: we write about them in problemsetting but seems to be much harder (and not very ML-y) than anticipated.
 
 ### EMBEDDINGS
@@ -25,7 +25,7 @@
 - [ ] Additional metadata from FRED
 - [x] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
 - [ ] Hyperparameter tuning (WIP)
-- [ ] **Speaker characteristics!!** We can do: position in fed, year of birth, education, gender, minority, district, ...
+- [x] **Speaker characteristics!!** We can do: position in fed, year of birth, education, gender, minority, district, ...
  
 
 ### BENCHMARKS
