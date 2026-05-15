@@ -12,13 +12,16 @@
 - [x] Weight aggregation:
   - [x] mean and std
   - [x] exponentially decaying weights
-  - [ ] attention (just one layer): once on full training, once including macro state, so somewhat 'context aware' => include description in PREPARE_PRESENTATION
+  - [x] attention (just one layer): once on full training, once including macro state, so somewhat 'context aware'
   - [ ] Voter rights are included in model, what about encoding of position within Fed? (So Chair = highest rank, then Governor, then President?)
+  - [ ] Describe in PROBLEMSETTING.md
 - [ ] **Normalize PCA**: probably necessary! if it were to dramatically decrease performance, ask David
 - [ ] Do alternative dimensionality reductions (WIP)
-  - [ ] PCA number of components => should be hyperparameter
-  - [ ] No dimensionality reduction
-  - [ ] Factor analysis?
+  - [x] PCA number of components => should be hyperparameter
+  - [ ] No dimensionality reduction => run on renku (check if works or hopelessly overfitting, I expect the latter)
+  - [x] Factor analysis
+  - [ ] n_pca (for pca and fa) into hyperparameter tuning!
+  - [ ] Describe in PROBLEMSETTING.md
 - [ ] Also run using the 512 mean and CLS versions, not just full speeches   
       
 ### TFT
