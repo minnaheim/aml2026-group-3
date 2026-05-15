@@ -54,7 +54,7 @@ def compute_metrics(df: pd.DataFrame) -> dict:
     rmse = float(np.sqrt(np.mean(errors ** 2)))
     mask = df["actual"].values != 0
     mape = float(np.mean(np.abs(errors[mask] / df["actual"].values[mask])) * 100)
-    return {"MAE": round(mae, 4), "RMSE": round(rmse, 4), "MAPE": round(mape, 4)}
+    return {"MAE": round(mae, 5), "RMSE": round(rmse, 5), "MAPE": round(mape, 5)}
 
 
 # ── save ─────────────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
 
     avg_df = (
         metrics_df.groupby(["model", "target"])[["MAE", "RMSE", "MAPE"]]
-        .mean().round(4).reset_index()
+        .mean().round(5).reset_index()
         .sort_values(by=["target", "model"]).reset_index(drop=True)
     )
     # append to master experiments file
@@ -191,7 +191,7 @@ def main():
     
     # add for different types of dimensionality reduction
     parser.add_argument(
-        "--reduction", default="pca", choices=["pca", "none"],
+        "--reduction", default="pca", choices=["pca", "fa", "none"],
         help="Dimensionality reduction strategy (default: pca)",
     )
     parser.add_argument(

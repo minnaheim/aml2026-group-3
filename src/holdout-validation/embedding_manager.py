@@ -18,7 +18,8 @@ train/test DataFrame, computed without any look-ahead.
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, FactorAnalysis # added factor analysis here
+# FA basically looks for latent factors, so something like 'hawkish' vs. 'dovish' speeches etc.
 
 N_PCA        = 5
 RANDOM_STATE = 42
@@ -178,6 +179,19 @@ class EmbeddingManager:
                 f"using all {len(self.emb_cols)} dims "
                 f"(fitted on {int(train_mask.sum())}/{len(self.full_df)} speeches)"
             )
+        
+        elif self.reduction == "fa":
+            # keep the n_pca and pca_column names so that it works nicely in the rest of the code
+            # also, adjusting n_pca in hyperparameter tuning also works here!
+            fa = FactorAnalysis(n_components=self.n_pca, random_state=RANDOM_STATE)
+            fa.fit(X_all[train_mask])  # fit on training speeches only — no leakage
+            reduced = fa.transform(X_all)
+            print(
+                f"[EmbeddingManager] Factor Analysis fold {fold}: {self.n_pca} factors "
+                f"(fitted on {int(train_mask.sum())}/{len(self.full_df)} speeches)"
+            )
+            out_cols = [f"pca_{i}" for i in range(self.n_pca)]    
+        
         else:
             raise ValueError(f"Unknown reduction: {self.reduction}. Choose from 'pca', 'none'")
 
