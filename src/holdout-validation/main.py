@@ -54,7 +54,34 @@ def compute_metrics(df: pd.DataFrame) -> dict:
     rmse = float(np.sqrt(np.mean(errors ** 2)))
     mask = df["actual"].values != 0
     mape = float(np.mean(np.abs(errors[mask] / df["actual"].values[mask])) * 100)
-    return {"MAE": round(mae, 5), "RMSE": round(rmse, 5), "MAPE": round(mape, 5)}
+
+    # Relative RMSE (divide RMSE by std of actuals)
+    std_actual = np.std(df["actual"].values)
+    rel_rmse = float(rmse / std_actual) if std_actual > 0 else np.nan
+
+    # Quantile loss (if quantiles available)
+    quantile_loss = np.nan
+    if "pred_lo" in df.columns and "pred_hi" in df.columns:
+        # Use 0.1 and 0.9 quantiles if present, else fallback to 0.05/0.95
+        q_lo = "pred_lo"
+        q_hi = "pred_hi"
+
+        # Compute pinball loss for both quantiles and average
+        def pinball_loss(y, y_hat, q):
+            delta = y - y_hat
+            return np.mean(np.maximum(q * delta, (q - 1) * delta))
+        y = df["actual"].values
+        ql_10 = pinball_loss(y, df[q_lo].values, 0.1)
+        ql_90 = pinball_loss(y, df[q_hi].values, 0.9)
+        quantile_loss = float((ql_10 + ql_90) / 2)
+
+    return {
+        "MAE": round(mae, 5),
+        "RMSE": round(rmse, 5),
+        "MAPE": round(mape, 5),
+        "rel_RMSE": round(rel_rmse, 5),
+        "QuantileLoss": round(quantile_loss, 5) if not np.isnan(quantile_loss) else np.nan,
+    }
 
 
 # ── save ─────────────────────────────────────────────────────────────────────
@@ -74,12 +101,12 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
                 m = compute_metrics(df)
                 rows.append({"model": model, "fold": fold, "target": target, **m})
 
-    metrics_df = pd.DataFrame(rows)[["model", "fold", "target", "MAE", "RMSE", "MAPE"]]
+    metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE", "RMSE", "MAPE", "rel_RMSE", "QuantileLoss"] if c in pd.DataFrame(rows).columns]]
     metrics_df = metrics_df.sort_values(by=["target", "model", "fold"]).reset_index(drop=True)
     metrics_df.to_csv(run_dir  / "metrics_per_fold.csv", index=False)
 
     avg_df = (
-        metrics_df.groupby(["model", "target"])[["MAE", "RMSE", "MAPE"]]
+        metrics_df.groupby(["model", "target"])[[c for c in ["MAE", "RMSE", "MAPE", "rel_RMSE", "QuantileLoss"] if c in metrics_df.columns]]
         .mean().round(5).reset_index()
         .sort_values(by=["target", "model"]).reset_index(drop=True)
     )
@@ -126,11 +153,16 @@ def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
                         color="black", linewidth=1.5, label="Actual")
                 actual_drawn = True
 
-            ax.plot(df["date"], df["predicted"],
+                ax.plot(df["date"], df["predicted"],
                     color=colors.get(model, "orange"),
                     linewidth=1.5,
                     linestyle=linestyles.get(model, "-"),
                     label=f"{model} Predicted")
+
+                # Add prediction interval fill for TFT quantiles if available
+                if model == "TFT" and "pred_lo" in df.columns and "pred_hi" in df.columns:
+                    ax.fill_between(df["date"], df["pred_lo"], df["pred_hi"],
+                        color=colors["TFT"], alpha=0.15, label="TFT 10–90% PI")
 
         ax.set_title(f"{target}: Predicted vs Actual")
         ax.set_xlabel("Date")

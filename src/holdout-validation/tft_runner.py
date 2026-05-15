@@ -9,7 +9,7 @@ import lightning.pytorch as pl
 import matplotlib as plt
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import EncoderNormalizer # switched from group normalizer
-from pytorch_forecasting.metrics import SMAPE
+from pytorch_forecasting.metrics import SMAPE, QuantileLoss
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 warnings.filterwarnings("ignore")
@@ -31,7 +31,8 @@ class TFTRunner:
     MAX_PREDICTION_LENGTH = 12 # 12-month forecast horizon
     PATIENCE = 15
     MAX_EPOCHS = 50
-    LEARNING_RATE = 0.03
+    LEARNING_RATE = 0.005
+    QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95] # forecast quantiles for TFT
 
     def __init__(self, dfb):
         """
@@ -151,7 +152,8 @@ class TFTRunner:
                                       # fomc dates known in advance — only included with speeches
                                       *fomc_known_present],
             time_varying_unknown_reals=[*covariates, *lag_cols, *pca_cols_present, *dissent_cols_present],
-            target_normalizer=EncoderNormalizer(transformation=None), # cannot use softplus anymrore since log diff can be negative; None since data SHOULD be mean reverting
+            # UNRATE is the only target with negative values, so it doesn't get a softplus normalizer; all others do
+            target_normalizer=EncoderNormalizer(transformation="softplus") if target == "UNRATE" else EncoderNormalizer(transformation=None), 
             add_relative_time_idx=True,
             add_target_scales=True,
             add_encoder_length=True,
@@ -203,8 +205,8 @@ class TFTRunner:
             attention_head_size=2,
             dropout=0.2,
             hidden_continuous_size=8,
-            output_size=1,
-            loss=SMAPE(),
+            output_size=len(self.QUANTILES),
+            loss=QuantileLoss(quantiles=self.QUANTILES),
             log_interval=10,
             reduce_on_plateau_patience=4,
         )
@@ -332,7 +334,7 @@ class TFTRunner:
             )
             pred_dl = pred_ds.to_dataloader(train=False, batch_size=batch_size, num_workers=0)
 
-            raw_preds = model.predict(pred_dl)          # (1, MAX_PREDICTION_LENGTH)
+            raw_preds = model.predict(pred_dl, mode="quantiles")  # (1, MAX_PREDICTION_LENGTH)
             if raw_preds.ndim == 3:
                 raw_preds = raw_preds.squeeze(1)
             preds_np = raw_preds.detach().cpu().numpy()
@@ -343,7 +345,7 @@ class TFTRunner:
 
             for i in range(window_size):
                 row  = test_window.iloc[i]
-                pred = float(preds_np[0, pred_offset + i])
+                pred = float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.5)]) # median quantile is used for prediction  
                 #ANNA # reverse the logging from before
                 # if target in LOG_TARGETS:
                 #     pred = np.exp(pred)
@@ -352,7 +354,9 @@ class TFTRunner:
                 all_rows.append({
                     "date":      row["date"],
                     "actual":    float(row[target]),  # test_raw is original scale
-                    "predicted": pred,
+                    "predicted": float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.5)]),   # q0.5
+                    "pred_lo":   float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.1)]),   # q0.1
+                    "pred_hi":   float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.9)]),   # q0.9
                     "target":    target,
                 })
 
@@ -361,7 +365,7 @@ class TFTRunner:
         result_df = (
             result_df.set_index("date")
                      .resample(freq).first()
-                     .dropna(subset=["actual", "predicted"])
+                     .dropna(subset=["actual", "predicted", "pred_lo", "pred_hi"])  # drop any rows where actual or predicted is NaN
                      .reset_index()
         )
         result_df["target"] = target
