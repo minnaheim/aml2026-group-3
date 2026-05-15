@@ -319,7 +319,6 @@ class DataFrameBuilder:
         }
       
       sample_keys = list(month_pca.values())[0].keys()
-      print(f"[DEBUG] speech feature keys: {list(sample_keys)}")
       
       # Extract new keys (pca_0_mean, pca_0_std, etc.)
       sample_keys = list(month_pca.values())[0].keys()
@@ -502,10 +501,8 @@ class DataFrameBuilder:
             self.pca_cols = raw_pca_cols
             
             # make sure that attention model is only fitted on the training speeches and we have no data leakage!
-            print(f"[DEBUG] aggregation strategy: {self.aggregation}")
             if self.aggregation == "attention":
                 train_end = s["train"]["date"].max()
-                print(f"[DEBUG] fitting attention model on speeches up to {train_end}")
                 self.attention_model = train_attention_aggregator(
                     speeches_df, raw_pca_cols, train_end
                 )

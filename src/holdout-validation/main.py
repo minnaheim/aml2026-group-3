@@ -189,6 +189,16 @@ def main():
         help="Forecast horizon in months (default: 12)",
     )
     
+    # add for different types of dimensionality reduction
+    parser.add_argument(
+        "--reduction", default="pca", choices=["pca", "none"],
+        help="Dimensionality reduction strategy (default: pca)",
+    )
+    parser.add_argument(
+        "--n-pca", type=int, default=5,
+        help="Number of PCA components (default: 5, only used when --reduction pca)",
+    )
+    
     # to save runs individually
     parser.add_argument(
         "--run-name", default="default",
@@ -224,7 +234,13 @@ def main():
 
     if args.embedding is not None: # allow for different models!
         # re-fit PCA per fold on training speeches only — no look-ahead leakage
-        emb = EmbeddingManager(str(root), embedding=args.embedding).load()
+        # NOW: depending on whether we actually call pca or "none" (or factor analysis, to do)
+        emb = EmbeddingManager(
+            str(root), 
+            embedding=args.embedding, 
+            n_pca=args.n_pca,
+            reduction=args.reduction
+        ).load()
         splits = dfb.add_leakage_free_embeddings(splits, emb)
 
     for s in splits:

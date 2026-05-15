@@ -60,10 +60,11 @@ class EmbeddingManager:
         pca_0 … pca_{n_pca-1} columns for use in DataFrameBuilder.
     """
 
-    def __init__(self, path: str, n_pca: int = N_PCA, embedding: str = "fomc-roberta"):
+    def __init__(self, path: str, n_pca: int = N_PCA, embedding: str = "fomc-roberta", reduction: str = "pca"):
         self.path   = Path(path)
         self.n_pca  = n_pca
         self.embedding = embedding
+        self.reduction = reduction # "pca" or "none" or later, to add, "factor" or so for factor analysis
         self.full_df:  pd.DataFrame | None = None
         self.emb_cols: list[str]           = []
         self._splits:  list[dict] | None   = None  # set by generate_split()
@@ -123,47 +124,70 @@ class EmbeddingManager:
         return self
 
     # ------------------------------------------------------------------
-    def recalculate_pca(self, fold: int = 0) -> pd.DataFrame:
-        """
-        Fit PCA on training speeches only; project all speeches into that space.
-
-        PCA is fitted only on speeches with Date <= train_end for this fold,
-        then the fitted model is applied to ALL speeches (including post-cutoff).
-        This gives each speech a coordinate in the training PCA space with
-        no information from future speeches leaking into the basis.
-
-        Parameters
-        ----------
-        fold : 0-based index into self._splits.
-
-        Returns
-        -------
-        pd.DataFrame with available meta columns + pca_0 … pca_{n_pca-1},
-        one row per speech.
-        """
-        assert self._splits is not None, "Call generate_split() before recalculate_pca()."
+    def reduce_embeddings(self, fold: int = 0) -> pd.DataFrame:
+        """Reduce embeddings using the selected strategy (pca or none)."""
+        assert self._splits is not None, "Call generate_split() before reduce_embeddings()."
         split  = self._splits[fold]
         cutoff = split["train_end"]
-
-        train_mask = self.full_df["Date"] <= cutoff
-        X_all      = self.full_df[self.emb_cols].values.astype(np.float32)
-
-        pca = PCA(n_components=self.n_pca, random_state=RANDOM_STATE)
-        pca.fit(X_all[train_mask])   # fit on training speeches only — no leakage
-        reduced = pca.transform(X_all)  # project all speeches into training PCA space
-
-        cumvar = np.cumsum(pca.explained_variance_ratio_)
-        print(
-            f"[EmbeddingManager] PCA fold {fold}: "
-            # f"5→{cumvar[4]:.0%}  10→{cumvar[9]:.0%}  {self.n_pca}→{cumvar[-1]:.0%} "
-            f"(fitted on {int(train_mask.sum())}/{len(self.full_df)} speeches)"
-        )
-
+    
         available_meta = [c for c in _META_COLS if c in self.full_df.columns]
-        pca_cols = [f"pca_{i}" for i in range(self.n_pca)]
+        X_all = self.full_df[self.emb_cols].values.astype(np.float32)
+        train_mask = self.full_df["Date"] <= cutoff
+
+        if self.reduction == "pca":
+            """
+            Fit PCA on training speeches only; project all speeches into that space.
+
+            PCA is fitted only on speeches with Date <= train_end for this fold,
+            then the fitted model is applied to ALL speeches (including post-cutoff).
+            This gives each speech a coordinate in the training PCA space with
+            no information from future speeches leaking into the basis.
+
+            Parameters
+            ----------
+            fold : 0-based index into self._splits.
+
+            Returns
+            -------
+            pd.DataFrame with available meta columns + pca_0 … pca_{n_pca-1},
+            one row per speech.
+            """
+            pca = PCA(n_components=self.n_pca, random_state=RANDOM_STATE)
+            pca.fit(X_all[train_mask])
+            reduced = pca.transform(X_all)
+            cumvar = np.cumsum(pca.explained_variance_ratio_)
+            print(
+                f"[EmbeddingManager] PCA fold {fold}: {self.n_pca} components → "
+                f"{cumvar[-1]:.1%} variance explained "
+                f"(fitted on {int(train_mask.sum())}/{len(self.full_df)} speeches)"
+            )
+            out_cols = [f"pca_{i}" for i in range(self.n_pca)]
+
+        elif self.reduction == "none":
+            # no reduction, use raw embeddings directly
+            # this can be very high dimensional (768, 1024 etc.) so use with caution!
+            print(
+                f"[WARNING] No reduction: using all {len(self.emb_cols)} dims. "
+                f"This will be very slow on CPU and may overfit badly. "
+                f"Run with --device cuda for reasonable speed."
+            )
+            reduced = X_all
+            out_cols = [f"pca_{i}" for i in range(len(self.emb_cols))]
+            print(
+                f"[EmbeddingManager] No reduction fold {fold}: "
+                f"using all {len(self.emb_cols)} dims "
+                f"(fitted on {int(train_mask.sum())}/{len(self.full_df)} speeches)"
+            )
+        else:
+            raise ValueError(f"Unknown reduction: {self.reduction}. Choose from 'pca', 'none'")
+
         out = self.full_df[available_meta].copy().reset_index(drop=True)
-        out[pca_cols] = reduced
+        out[out_cols] = reduced
         return out
+        
+    
+    def recalculate_pca(self, fold: int = 0) -> pd.DataFrame:
+        return self.reduce_embeddings(fold=fold) # keeping this for backward compatibility
 
     # ------------------------------------------------------------------
     def shuffle_embeddings(self, fold: int = 0) -> pd.DataFrame:
@@ -191,7 +215,7 @@ class EmbeddingManager:
         cutoff   = split["train_end"]
         test_end = split["test_end"]
 
-        df       = self.recalculate_pca(fold=fold)
+        df       = self.reduce_embeddings(fold=fold)
         pca_cols = [c for c in df.columns if c.startswith("pca_")]
         rng      = np.random.default_rng(RANDOM_STATE)
 
