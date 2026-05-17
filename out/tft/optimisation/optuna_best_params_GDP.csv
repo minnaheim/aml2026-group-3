@@ -1,0 +1,4 @@
+max_encoder_length,min_encoder_length,n_pca,SPEECH_WINDOW_MONTHS,hidden_size,lstm_layers,attention_head_size,hidden_continuous_size,dropout,learning_rate,batch_size,Best_Validation_Loss,Trial_Number,Embedding,Seed
+48,8,20,6,16,2,1,32,0.08097237571817183,0.0003872118032174585,64,0.0006495257839560509,1,fomc-roberta,42
+24,8,20,12,16,2,2,32,0.32481158648755476,0.0003972110727381913,128,0.0007474881713278592,0,,42
+24,20,12,64,1,4,16,0.3788246295474662,0.04835952776465952,32,0.0005187652423046529,1,,42
