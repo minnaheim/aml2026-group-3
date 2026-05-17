@@ -217,7 +217,7 @@ def main():
     )
     
     parser.add_argument(
-        "--horizon", type=int, default=12, choices=[1, 6, 9, 12],
+        "--horizon", type=int, default=12, choices=[1, 3, 6, 9, 12],
         help="Forecast horizon in months (default: 12)",
     )
     
@@ -298,6 +298,9 @@ def main():
         results["ARIMA"] = {s["fold"]: {} for s in splits}
 
     # ── 2. run all models for each fold × target ──────────────────────────────
+    # accumulate importance_dfs across folds: {target: {key: [df_fold1, df_fold2, ...]}}
+    importance_records: dict[str, dict[str, list]] = {}
+
     for fold_idx, s in enumerate(splits):
         fold_num = s["fold"]
         for target in args.targets:
@@ -336,6 +339,37 @@ def main():
             )
             results["TFT"][fold_num][target] = tft_df
             print(f"  → {len(tft_df)} predictions")
+
+            # collect interpretation results for this fold/target (save after aggregation)
+            imp = tft_runner.interpret_output()
+            for key, df in imp.items():
+                importance_records.setdefault(target, {}).setdefault(key, []).append(df)
+
+    # ── 2b. aggregate and save importance across folds ─────────────────────────
+    imp_out = out_dir / args.run_name
+    imp_out.mkdir(parents=True, exist_ok=True)
+    for target, keys in importance_records.items():
+        for key, dfs in keys.items():
+            agg = (
+                pd.concat(dfs)
+                .groupby("variable")["importance"].mean()
+                .reset_index()
+                .sort_values("importance", ascending=False)
+            )
+            csv_path = imp_out / f"{target}_{key}_importance_agg.csv"
+            agg.to_csv(csv_path, index=False)
+            print(f"Saved aggregated importance: {csv_path}")
+
+            fig, ax = plt.subplots(figsize=(6, max(2, len(agg) * 0.3)))
+            ax.barh(agg["variable"], agg["importance"], color="steelblue")
+            ax.set_xlabel("Mean Importance (across folds)")
+            ax.set_title(f"{target} – {key.replace('_', ' ').title()}")
+            ax.invert_yaxis()
+            fig.tight_layout()
+            fig_path = imp_out / f"{target}_{key}_importance_agg.png"
+            fig.savefig(fig_path)
+            plt.close(fig)
+            print(f"Saved aggregated importance plot: {fig_path}")
 
     # ── 3. save predictions vs. actuals, calculate eval metrics ──────────────
     save_results(results, out_dir, 
