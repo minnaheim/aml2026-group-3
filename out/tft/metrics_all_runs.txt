@@ -2,7 +2,7 @@
 =======================================================
 Run date:          2026-05-13 15:46
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -16,7 +16,7 @@ MAPE = 0.67%
 =======================================================
 Run date:          2026-05-13 15:51
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -30,7 +30,7 @@ MAPE = 0.46%
 =======================================================
 Run date:          2026-05-13 15:53
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -44,7 +44,7 @@ MAPE = 0.45%
 =======================================================
 Run date:          2026-05-13 15:55
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -100,7 +100,7 @@ MAPE = 4.07%
 =======================================================
 Run date:          2026-05-13 16:24
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -114,7 +114,7 @@ MAPE = 6.38%
 =======================================================
 Run date:          2026-05-13 16:25
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -128,7 +128,7 @@ MAPE = 5.53%
 =======================================================
 Run date:          2026-05-13 16:27
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -184,7 +184,7 @@ MAPE = 27.91%
 =======================================================
 Run date:          2026-05-13 22:44
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -199,7 +199,7 @@ MAPE = 0.47%
 =======================================================
 Run date:          2026-05-13 22:45
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -214,7 +214,7 @@ MAPE = 2.06%
 =======================================================
 Run date:          2026-05-13 22:46
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -229,7 +229,7 @@ MAPE = 2.81%
 =======================================================
 Run date:          2026-05-13 22:50
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -244,7 +244,7 @@ MAPE = 1.29%
 =======================================================
 Run date:          2026-05-13 22:51
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -259,7 +259,7 @@ MAPE = 1.91%
 =======================================================
 Run date:          2026-05-13 22:53
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -274,7 +274,7 @@ MAPE = 21.45%
 =======================================================
 Run date:          2026-05-13 22:54
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -289,7 +289,7 @@ MAPE = 6.58%
 =======================================================
 Run date:          2026-05-13 22:56
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -304,7 +304,7 @@ MAPE = 3.33%
 =======================================================
 Run date:          2026-05-13 22:58
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -454,7 +454,7 @@ MAPE = 46.42%
 =======================================================
 Run date:          2026-05-13 23:31
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -469,7 +469,7 @@ MAPE = 4.80%
 =======================================================
 Run date:          2026-05-13 23:33
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -484,7 +484,7 @@ MAPE = 2.20%
 =======================================================
 Run date:          2026-05-13 23:34
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -544,7 +544,7 @@ MAPE = 15.66%
 =======================================================
 Run date:          2026-05-13 23:43
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -559,7 +559,7 @@ MAPE = 3.31%
 =======================================================
 Run date:          2026-05-13 23:44
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -574,7 +574,7 @@ MAPE = 0.50%
 =======================================================
 Run date:          2026-05-13 23:46
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -634,7 +634,7 @@ MAPE = 18.78%
 =======================================================
 Run date:          2026-05-13 23:54
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -649,7 +649,7 @@ MAPE = nan%
 =======================================================
 Run date:          2026-05-13 23:58
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -664,7 +664,7 @@ MAPE = 8.73%
 =======================================================
 Run date:          2026-05-14 00:00
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -679,7 +679,7 @@ MAPE = 6.49%
 =======================================================
 Run date:          2026-05-14 00:02
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -739,7 +739,7 @@ MAPE = 29.79%
 =======================================================
 Run date:          2026-05-14 00:12
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -754,7 +754,7 @@ MAPE = 0.76%
 =======================================================
 Run date:          2026-05-14 00:14
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -769,7 +769,7 @@ MAPE = 1.08%
 =======================================================
 Run date:          2026-05-14 00:16
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -829,7 +829,7 @@ MAPE = 10.70%
 =======================================================
 Run date:          2026-05-14 00:24
 Target:            GDP
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -844,7 +844,7 @@ MAPE = 3.49%
 =======================================================
 Run date:          2026-05-14 00:26
 Target:            CPI
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01
@@ -859,7 +859,7 @@ MAPE = 1.65%
 =======================================================
 Run date:          2026-05-14 00:27
 Target:            UNRATE
-Speech embeddings: ON – FOMC-RoBERTa full mean
+Speech embeddings: ON ï¿½ FOMC-RoBERTa full mean
 Embedding model:   FOMC-RoBERTa full mean
 Seed:              42
 Cutoff date:       2023-01-01

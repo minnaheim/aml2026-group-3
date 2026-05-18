@@ -16,16 +16,25 @@ Below you will find a project overview of the most important files.
 ```md
 ├── data/
 ├── out/
-│   └── holdout/
-│       ├── metrics.csv                 # MAE/RMSE per model and target
-│       ├── predictions_vs_actuals.png  # visual comparison across models
-│       └── *_predictions.csv          # per-target prediction files
+│   ├── holdout/
+│   │   ├── metrics.csv                         # MAE/RMSE per model and target
+│   │   ├── metrics_per_fold.csv                # per-fold metrics
+│   │   ├── predictions_vs_actuals.png          # visual comparison across models
+│   ├── cv/
+│   │   ├── ar_orders/global.json               # CV-selected AR orders
+│   │   └── arima_orders/global.json            # CV-selected ARIMA orders
+│   └── tft/                                    # misc TFT experiment outputs
 ├── src/
-│   └── holdout-validation/
-│       ├── data_frame_builder.py       # loads macro series + optional speech embeddings; builds the panel dataframe
-│       ├── benchmark_runner.py         # AR(1) and ARIMA runners (log-differencing, fitting, inverse transform)
-│       ├── tft_runner.py               # TFT runner (PyTorch Forecasting)
-│       └── main.py                     # orchestrates all runners, logs to W&B, saves outputs
+│   ├── holdout-validation/
+│   │   ├── a_embedding_manager.py      # manages FOMC speech embedding loading and alignment
+│   │   ├── a_speech_attention.py       # speech attention analysis
+│   │   ├── b_data_frame_builder.py     # loads macro series + optional speech embeddings; builds the panel dataframe
+│   │   ├── c_benchmark_runner.py       # AR(1) and ARIMA runners (log-differencing, fitting, inverse transform)
+│   │   ├── d_tft_runner.py             # TFT runner (PyTorch Forecasting)
+│   │   ├── e_main.py                   # orchestrates all runners, logs to W&B, saves outputs
+│   │   ├── f_run_ablation.py           # ablation study runner
+│   │   └── plot_experiments.py         # plotting utilities for experiment results
+│   └── notebooks/                      # exploratory notebooks and scripts (not part of main pipeline)
 ```
 
 ---
@@ -34,24 +43,39 @@ Below you will find a project overview of the most important files.
 
 Default targets (`CPI`, `UNRATE`, `GDP`) on GPU with W&B logging:
 ```bash
-python src/holdout-validation/main.py --wandb --device cuda
+python src/holdout-validation/e_main.py --wandb --device cuda
 ```
 
 Single target:
 ```bash
-python src/holdout-validation/main.py --target CPI --device cpu
+python src/holdout-validation/e_main.py --target CPI --device cpu
 ```
 
 With FOMC speech embeddings:
 ```bash
-python src/holdout-validation/main.py --target CPI --embedding fomc-roberta --wandb --device cuda
+python src/holdout-validation/e_main.py --target CPI --embedding fomc-roberta --wandb --device cuda
 ```
 
 Without FOMC speech embeddings:
 ```bash
-python src/holdout-validation/main.py --wandb --device cuda
+python src/holdout-validation/e_main.py --wandb --device cuda
 ```
-With FOMC speech embeddings:
+
+---
+
+## Running the ablation
+
+All embedding/aggregation combinations across all targets:
 ```bash
-python src/holdout-validation/main.py --wandb --device cuda -embedding fomc-roberta
+python src/holdout-validation/f_run_ablation.py --device cuda
+```
+
+Single target (quick test):
+```bash
+python src/holdout-validation/f_run_ablation.py --targets CPI --device cpu
+```
+
+Specific runs only:
+```bash
+python src/holdout-validation/f_run_ablation.py --runs macro_only fomc_roberta_mean --device cuda
 ```

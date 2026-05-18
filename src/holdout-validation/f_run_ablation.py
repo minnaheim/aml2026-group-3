@@ -79,7 +79,7 @@ def main():
     )
     args = parser.parse_args()
 
-    main_script = Path(__file__).parent / "main.py"
+    main_script = Path(__file__).parent / "e_main.py"
     
     experiments = EXPERIMENTS
     if args.runs:

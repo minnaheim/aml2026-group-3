@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 # get attention weights layer
-from speech_attention import SpeechAttentionAggregator, train_attention_aggregator, aggregate_with_attention
+from a_speech_attention import SpeechAttentionAggregator, train_attention_aggregator, aggregate_with_attention
 
 # how many quarters to look back 
 # when aggregating speeches into a single feature vector per quarter

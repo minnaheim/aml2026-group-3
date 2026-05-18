@@ -20,10 +20,10 @@ import wandb
 import os
 
 sys.path.insert(0, str(Path(__file__).parent))
-from data_frame_builder  import DataFrameBuilder
-from benchmark_runner    import ARRunner, ARIMARunner
-from tft_runner          import TFTRunner
-from embedding_manager   import EmbeddingManager
+from b_data_frame_builder import DataFrameBuilder
+from c_benchmark_runner   import ARRunner, ARIMARunner
+from d_tft_runner         import TFTRunner
+from a_embedding_manager  import EmbeddingManager
 
 MAIN_TARGETS = ["CPI", "UNRATE", "GDP" ]
 ALL_TARGETS = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
