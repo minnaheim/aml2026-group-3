@@ -2,20 +2,34 @@
 
 ## TO DO
 ### DATA
-- [ ] Get more variables with long time series dimension from FRED etc.
-- Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th). 
+- [x] Get more variables with long time series dimension from FRED etc.
+- [x] Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th).
+- [ ] Discuss **vintages** with David: we write about them in problemsetting but seems to be much harder (and not very ML-y) than anticipated.
 
 ### EMBEDDINGS
-- [ ] Test different methods => be creative
-- [ ] PCA should be fitted until 2011-01-01 or so only (so until the end of the very first tft training data)
-  - so for pre-2011 speeches, use fit_transform
-  - for everything later, use transform only
-  - RERUN: Implement in data_frame_builder and rerun with cutoff on 2011-01-01 => i mistakenly ran it with cutoff 2014-01-01
+- [x] Test different methods => be creative
+- [x] PCA should be fitted until 2011-01-01 or so only (so until the end of the very first tft training data)
+- [x] Weight aggregation:
+  - [x] mean and std
+  - [x] exponentially decaying weights
+  - [x] attention (just one layer): once on full training, once including macro state, so somewhat 'context aware'
+  - [ ] Voter rights are included in model, what about encoding of position within Fed? (So Chair = highest rank, then Governor, then President?)
+  - [ ] Describe in PROBLEMSETTING.md
 - [ ] **Normalize PCA**: probably necessary! if it were to dramatically decrease performance, ask David
+- [ ] Do alternative dimensionality reductions (WIP)
+  - [x] PCA number of components => should be hyperparameter
+  - [ ] No dimensionality reduction => run on renku (check if works or hopelessly overfitting, I expect the latter)
+  - [x] Factor analysis
+  - [ ] n_pca (for pca and fa) into hyperparameter tuning!
+  - [ ] Describe in PROBLEMSETTING.md
+- [ ] Also run using the 512 mean and CLS versions, not just full speeches   
       
 ### TFT
 - [x] Additional metadata from FRED
-- [ ] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
+- [x] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
+- [ ] Hyperparameter tuning (WIP)
+- [x] **Speaker characteristics!!** We can do: position in fed, year of birth, education, gender, minority, district, ...
+ 
 
 ### BENCHMARKS
 - [x] Get AR(p) process running
@@ -23,35 +37,18 @@
 ### EVAL METRICS
 - [x] For AR / ARIMA: expanding / rolling window
 - [x] For TFT: one-holdout
-- [x] unified metrics for all
+  - switched to 3-fold
+- [ ] **Quantile Loss/q-Risk**
+- [ ] **rRMSE**, so relative RMSE error from including vs. not including speeches in TFT (can calculate from what we have)
+- [ ] **variable selection**: we already have the interpret_output function but we aren't saving output yet => Save!!
 
 
 ### CV PIPELINE
-- [x] Get up and running!! (WIP)
+- [x] Get up and running!!
 
-# Notes from Meeting on Tue, 12.5 (individual todos)
-
-## minna:
-- [x] multiple folds
-- [ ] hyperparam tuning (with nested cv) -> chris
-- [ ] merge anna's changes (from main to mine)
-- [ ] add chris' embeddings
-- [ ] check out diff with chris pipeline to mine
-- [ ] why are the predictions always linear? look at AR weight matrices
-- [x] ar process adjustment 
-
-
-## chris
-- [x] 512 and full embeddings 
-- [x] kafka embeddings 
-- [ ] adds what he did on hyperparam tuning
-
-
-## anna
-- [ ] trying no dim. reduction, diff. reduction, pca-with differeing, factor analysis 
-- [ ] alignment via attention 
-- [ ] use the growth rates instead of level
-
+### ABLATION
+- [ ] Perform proper study
+  - [ ] Include **different horizons** systematically: pipeline accomodates this, ablation code not yet
 
 ## Decisions
 ### Data Sources
