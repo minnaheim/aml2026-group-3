@@ -79,3 +79,10 @@ Specific runs only:
 ```bash
 python src/holdout-validation/f_run_ablation.py --runs macro_only fomc_roberta_mean --device cuda
 ```
+
+
+## Rendering the Slides
+
+```bash 
+
+```
