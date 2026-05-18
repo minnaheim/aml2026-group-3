@@ -86,7 +86,6 @@ Ideas for Variable Setting for TFT:
 - Error Metrics:
   - Mean RMSE (over all folds)
   - Mean Average Error
-  - Mean Average Percentage Error
 - Use of Vintages of Macro Variables^[We assume Fed Speeches are unrevised]
 - Horizon
   - for *Monthly* Variables (CPI, unemployment rate, exchange rates): 1,6,12
