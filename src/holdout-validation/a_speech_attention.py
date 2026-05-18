@@ -37,6 +37,7 @@ class SpeechAttentionAggregator(nn.Module):
         X : (n_speeches, n_pca)
         returns : (n_pca,) weighted sum
         """
+        # K,V matrix come from encoder, Q comes from decoder
         K = self.key_fc(X)    # (n_speeches, n_pca)
         V = self.value_fc(X)  # (n_speeches, n_pca)
         
@@ -50,7 +51,7 @@ class SpeechAttentionAggregator(nn.Module):
 
 
 def train_attention_aggregator(
-    speeches_df: pd.DataFrame,
+    speeches_df: pd.DataFrame, # notice how there are no macro speeches here
     pca_cols: list[str],
     train_end: pd.Timestamp,
     n_epochs: int = 50,
@@ -88,13 +89,14 @@ def train_attention_aggregator(
     target = X.mean(dim=0)  # (n_pca,)
     
     print(f"[SpeechAttention] Training on {len(X)} speeches for {n_epochs} epochs...")
+    # here backprop step
     for epoch in range(n_epochs):
         model.train()
-        opt.zero_grad()
+        opt.zero_grad() # set grad to 0 (redo this for each epoch)
         out, _ = model(X)
         loss = nn.MSELoss()(out, target)
         loss.backward()
-        opt.step()
+        opt.step() # performs opt step
         if (epoch + 1) % 10 == 0:
             print(f"  epoch {epoch+1}/{n_epochs}  loss={loss.item():.6f}")
     
@@ -185,6 +187,9 @@ def train_context_aware_attention(
     model   = ContextAwareSpeechAttentionAggregator(n_pca=n_pca, n_macro=n_macro).to(device)
     
     # add a small prediction head: pca → macro
+    # this gives extra signal for the backprop, because it incentivises the use of the macro vars
+    # the pred head is created from macro vars, the goal is for the model to replicate the info from macro vars
+    # this is used to calculate loss
     pred_head = nn.Linear(n_pca, n_macro).to(device)
     opt = torch.optim.Adam(list(model.parameters()) + list(pred_head.parameters()), lr=lr)
     
@@ -214,7 +219,7 @@ def train_context_aware_attention(
             aggregated, _ = model(X, macro_state)
             predicted_macro = pred_head(aggregated)
             
-            # target: next month's macro state (predictive objective)
+            # target: contruct current month (reconstruction objective)
             loss = nn.MSELoss()(predicted_macro, macro_state)
             opt.zero_grad()
             loss.backward()

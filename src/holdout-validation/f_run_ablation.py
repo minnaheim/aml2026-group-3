@@ -79,8 +79,12 @@ def main():
     )
     args = parser.parse_args()
 
-    main_script = Path(__file__).parent / "e_main.py"
-    
+    main_script  = Path(__file__).parent / "e_main.py"
+    # re-write experiments for each ablation run (or else confusion)
+    master_path  = Path(__file__).parents[2] / "out" / "holdout" / "experiments.csv"
+    if master_path.exists():
+        master_path.unlink()
+
     experiments = EXPERIMENTS
     if args.runs:
         experiments = [e for e in EXPERIMENTS if e["run_name"] in args.runs]
