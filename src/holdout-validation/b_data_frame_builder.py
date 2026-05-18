@@ -3,9 +3,19 @@ import numpy as np
 import os
 from pathlib import Path
 
+# get attention weights layer
+from a_speech_attention import SpeechAttentionAggregator, train_attention_aggregator, aggregate_with_attention
+
 # how many quarters to look back 
 # when aggregating speeches into a single feature vector per quarter
 SPEECH_WINDOW_MONTHS = 12
+
+# speech weighting
+DECAY_LAMBDA = 0.01  # higher = faster decay (more recent speeches dominate)
+VOTER_WEIGHT = 2.0  # voters get twice the weight of non-voters
+
+# all speaker columns we have
+SPEAKER_COLS = ['is_voter', 'is_chair', 'female', 'minority', 'Date']
 
 class DataFrameBuilder:
 
@@ -22,12 +32,12 @@ class DataFrameBuilder:
         "Federal Reserve Bank of Dallas": "DAL", "Federal Reserve Bank of San Francisco": "SF"
     }  
 
-  def __init__(self, path: str | None = None):
+  def __init__(self, path: str | None = None, aggregation = 'mean'):
     if path is None:
       self.path = os.getcwd()
     else:
        self.path = path
-    self.N_FOLDS = 1 # holdout cv
+    self.N_FOLDS = 3 # holdout cv
     self.FINAL_HOLDOUT = 12 # 12 months = 1 year
     # data without holdout
     self.TRAIN_DEC = 0.8
@@ -42,7 +52,17 @@ class DataFrameBuilder:
     # populated by add_leakage_free_embeddings(); None means speeches not loaded.
     self.speeches_df: pd.DataFrame | None = None
     self.pca_cols: list[str] = []
-
+    
+    # add which type of aggregation we want for the speech embeddings
+    self.aggregation = aggregation
+    # fallback is 'mean'
+    # other options will be: exponential decay; attention-based
+    self.attention_model = None  # set when aggregation == "attention"
+    
+    # also: added 'context aware' attention, so, learn based on what macro conditions are
+    # this particularly speaks to the supply- vs. demand-driven inflation story
+    self.context_attention_model = None
+    self.macro_cols_for_attention = ["CPI", "UNRATE", "GDP", "FFR_mean", "GBP_mean"]
 
   # helper to clean initial macro df, same across all frequencies
   def _read_rename_date(self, freq_path):
@@ -186,22 +206,29 @@ class DataFrameBuilder:
   
 
 
-  def _aggregate_speeches_for_month(self, quarter_start: pd.Timestamp) -> dict[str, float]:
-      """Mean PCA vector for speeches in the rolling window before *month_start*.
-
-      Window: [quarter_start - SPEECH_WINDOW_QUARTERS quarters, quarter_start).
+  def _aggregate_speeches_for_month(self, quarter_start: pd.Timestamp, macro_state=None) -> dict[str, float]:
+      """Weighted PCA vector for speeches in the rolling window before *month_start*.
+      Weights combine:
+      
+      Aggregation strategies (controlled by self.aggregation):
+      - 'mean':      plain unweighted mean (baseline)
+      - 'decay':     exponential decay by recency, w = exp(-lambda * days_before)
+      - 'attention': learned weights (TODO)
+      
+      Window: [quarter_start - SPEECH_WINDOW_MONTHS, quarter_start).
       Falls back to any speech before quarter_start if the window is empty.
       """
+      
       assert self.speeches_df is not None
       window_start = quarter_start - pd.DateOffset(months=SPEECH_WINDOW_MONTHS)
       mask = (
           (self.speeches_df["Date"] >= window_start)
           & (self.speeches_df["Date"] < quarter_start)
       )
-      sub = self.speeches_df.loc[mask, self.pca_cols + ['is_voter']] # keep the is voter coulmn here
+      sub = self.speeches_df.loc[mask, self.pca_cols + SPEAKER_COLS] # keep the is voter coulmn here # also tge date column for the exponential decay
       if len(sub) == 0:
           sub = self.speeches_df.loc[
-              self.speeches_df["Date"] < quarter_start, self.pca_cols + ['is_voter']
+              self.speeches_df["Date"] < quarter_start, self.pca_cols + SPEAKER_COLS
           ]
       res = {}
 
@@ -209,11 +236,55 @@ class DataFrameBuilder:
           # new feautre: how many speeches were held be voters?
           # fixed here by moving outside loop
           res['voter_speech_ratio'] = float(sub['is_voter'].mean()) 
-          for col in self.pca_cols: 
-              res[f"{col}_mean"] = float(sub[col].mean()) 
-              res[f"{col}_std"] = float(sub[col].std()) if len(sub) > 1 else 0.0
+          res['chair_speech_ratio']      = float(sub['is_chair'].mean())
+          res['female_speaker_ratio']  = float(sub['female'].mean())
+          res['minority_speaker_ratio']= float(sub['minority'].mean())
+          
+          # compute weights based on strategy
+          if self.aggregation == "mean":
+            weights = np.ones(len(sub))
+            weights = weights / weights.sum()
+            for col in self.pca_cols:
+                weighted_mean = float(np.dot(weights, sub[col].values))
+                res[f"{col}_mean"] = weighted_mean
+                res[f"{col}_std"]  = float(np.sqrt(np.dot(weights, (sub[col].values - weighted_mean) ** 2))) if len(sub) > 1 else 0.0
+
+          elif self.aggregation == "decay":
+            days_before = (quarter_start - sub['Date']).dt.days.clip(lower=0)
+            weights = np.exp(-DECAY_LAMBDA * days_before.values)
+            weights = weights / weights.sum()
+            for col in self.pca_cols:
+                weighted_mean = float(np.dot(weights, sub[col].values))
+                res[f"{col}_mean"] = weighted_mean
+                res[f"{col}_std"]  = float(np.sqrt(np.dot(weights, (sub[col].values - weighted_mean) ** 2))) if len(sub) > 1 else 0.0
+
+          elif self.aggregation == "attention":
+              assert self.attention_model is not None, "Call _fit_attention() before aggregating."
+              weighted_mean_vec, attn_weights = aggregate_with_attention(
+                  self.attention_model, sub, self.pca_cols
+              )
+              
+              for col, val in zip(self.pca_cols, weighted_mean_vec):
+                  res[f"{col}_mean"] = float(val)
+                  # weighted std using attention weights
+                  res[f"{col}_std"]  = float(np.sqrt(np.dot(attn_weights, (sub[col].values - val) ** 2))) if len(sub) > 1 else 0.0
+                  
+          elif self.aggregation == "context_attention":
+              assert self.context_attention_model is not None
+              assert macro_state is not None, "macro_state required for context_attention"
+              from speech_attention import aggregate_with_context_attention
+              weighted_mean_vec, attn_weights = aggregate_with_context_attention(
+                  self.context_attention_model, sub, self.pca_cols, macro_state
+              )
+              for col, val in zip(self.pca_cols, weighted_mean_vec):
+                  res[f"{col}_mean"] = float(val)
+                  res[f"{col}_std"]  = float(np.sqrt(np.dot(attn_weights, (sub[col].values - val) ** 2))) if len(sub) > 1 else 0.0
+        
       else: 
           res['voter_speech_ratio'] = 0.0
+          res['chair_speech_ratio']  = 0.0
+          res['female_speaker_ratio']  = 0.0
+          res['minority_speaker_ratio']= 0.0
           for col in self.pca_cols:
               res[f"{col}_mean"] = 0.0
               res[f"{col}_std"] = 0.0
@@ -230,10 +301,25 @@ class DataFrameBuilder:
       """
       df = df.copy()
       df['_month_start'] = df['date'].dt.to_period('M').dt.start_time
-      month_pca = {
+      if self.aggregation == "context_attention":
+        # build macro state lookup per month
+        macro_lookup = {}
+        for ms in df['_month_start'].unique():
+            row = df[df['_month_start'] == ms]
+            if len(row) > 0:
+                macro_lookup[ms] = row[self.macro_cols_for_attention].iloc[0].values
+        month_pca = {
+            ms: self._aggregate_speeches_for_month(ms, macro_state=macro_lookup.get(ms))
+            for ms in df['_month_start'].unique()
+        }
+      else:
+        month_pca = {
             ms: self._aggregate_speeches_for_month(ms)
             for ms in df['_month_start'].unique()
         }
+      
+      sample_keys = list(month_pca.values())[0].keys()
+      
       # Extract new keys (pca_0_mean, pca_0_std, etc.)
       sample_keys = list(month_pca.values())[0].keys()
       for col_name in sample_keys:
@@ -354,15 +440,18 @@ class DataFrameBuilder:
      # first remove final holdout, not part of cv!
     df_holdout = df.iloc[-self.FINAL_HOLDOUT:].reset_index(drop=True)
 
+    # divide df_cv into (N_FOLDS + 1) equal blocks; each fold uses one block as test,
+    # all preceding blocks as training — standard expanding-window CV
+    n = len(df_cv)
+    test_size = n // (self.N_FOLDS + 1)
     splits = []
-    # rolling window cv
     for i in range(self.N_FOLDS):
-        train_end = (i + 1) * int(len(df_cv)*self.TRAIN_DEC)
-        test_end = train_end + int(len(df_cv)*(1-self.TRAIN_DEC))
+        train_end = (i + 1) * test_size
+        test_end  = min(train_end + test_size, n)
         splits.append({
             "fold": i + 1,
             "train": df_cv.iloc[:train_end],
-            "test": df_cv.iloc[train_end:test_end],
+            "test":  df_cv.iloc[train_end:test_end],
         })
 
     return splits, df_holdout
@@ -402,11 +491,30 @@ class DataFrameBuilder:
             if "CentralBank" in speeches_df.columns:
                 speeches_df["District"] = speeches_df["CentralBank"].map(self.DISTRICT_MAPPING)
             speeches_df["is_voter"] = speeches_df.apply(self._is_voter, axis=1)
+            # check if speaker is chair
+            speeches_df["is_chair"] = (speeches_df["Role"].str.lower().str.contains("chair", na=False) & 
+                                       ~speeches_df["Role"].str.lower().str.contains("vice", na=False)).astype(int)
 
             self.speeches_df = speeches_df
             # raw column names from speeches_df (pca_0, pca_1, ...)
             raw_pca_cols = [c for c in speeches_df.columns if c.startswith("pca_")]
             self.pca_cols = raw_pca_cols
+            
+            # make sure that attention model is only fitted on the training speeches and we have no data leakage!
+            if self.aggregation == "attention":
+                train_end = s["train"]["date"].max()
+                self.attention_model = train_attention_aggregator(
+                    speeches_df, raw_pca_cols, train_end
+                )
+                
+            if self.aggregation == "context_attention":
+                train_end = s["train"]["date"].max()
+                train_macro = s["train"].copy()  # has the macro state
+                from speech_attention import train_context_aware_attention
+                self.context_attention_model = train_context_aware_attention(
+                    speeches_df, train_macro, raw_pca_cols,
+                    self.macro_cols_for_attention, train_end
+                )
 
             # _add_speech_features overwrites self.pca_cols with aggregated names
             # (pca_0_mean, pca_0_std, …); restore raw names before the test call
@@ -420,7 +528,7 @@ class DataFrameBuilder:
 
   def get_data(self, splits, train: bool= True,  model: str = "TFT", target: str = "CPI", fold = 0):
     """
-    fold   : 1 fold only atm
+    fold   : 0-based index into splits
     train  : True → training split, False → test split
     model  : "AR" or "ARIMA" → univariate series resampled to native frequency
              "TFT"           → full daily dataframe

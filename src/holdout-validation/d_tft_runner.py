@@ -14,8 +14,10 @@ from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 warnings.filterwarnings("ignore")
 
-MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP",
-               "GBP_mean", "GBP_std", "YEN_mean", "YEN_std", "FFR"]
+MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "AWHMAN", "USACLI", "GDP",
+               # daily vars are mean and std
+               "GBP_mean", "GBP_std", "YEN_mean", "YEN_std", "FFR_mean", "FFR_std",
+               "T10Y2Y_mean", "T10Y2Y_std"]
 LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
 LAG_PERIODS = [1, 2, 6, 12]
 # same set as benchmark_runner.LOG_DIFF_TARGETS — log only, no differencing for now
@@ -27,7 +29,7 @@ class TFTRunner:
     # UPDATED: Change from days to months
     MAX_ENCODER_LENGTH = 24 # 2-year monthly lookback
     MAX_PREDICTION_LENGTH = 12 # 12-month forecast horizon
-    PATIENCE = 5
+    PATIENCE = 15
     MAX_EPOCHS = 50
     LEARNING_RATE = 0.03
 
@@ -167,7 +169,7 @@ class TFTRunner:
         """Build trainer + TFT, fit, return best checkpoint path."""
         callbacks = [
             # changed this to val_loss -> train-loss will usually increase, even if val_loss stops
-            EarlyStopping(monitor='val_loss', min_delta=1e-2,
+            EarlyStopping(monitor='val_loss',
                           patience=self.PATIENCE, verbose=False, mode='min'),
         ]
         if use_wandb:
@@ -277,7 +279,7 @@ class TFTRunner:
         return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
-                batch_size: int = 128, device: str = 'cpu') -> pd.DataFrame:
+                batch_size: int = 128, device: str = 'cpu', step: int | None = None) -> pd.DataFrame:
         """Rolling-window inference over the test split.
 
         The test period is typically much longer than MAX_PREDICTION_LENGTH, so
@@ -303,8 +305,8 @@ class TFTRunner:
         # get validation data (not test. misnomer), test not used in cv
         test_raw = self.dfb.get_data(splits, train=False, model='TFT', fold=fold)
 
-        test_len = len(test_raw)
-        step     = self.MAX_PREDICTION_LENGTH
+        test_len  = len(test_raw)
+        step      = step if step is not None else self.MAX_PREDICTION_LENGTH
         all_rows: list[dict] = []
         accumulated_preds: dict = {}  # date -> prediction in original scale (no pollution)
 
@@ -335,9 +337,9 @@ class TFTRunner:
                 raw_preds = raw_preds.squeeze(1)
             preds_np = raw_preds.detach().cpu().numpy()
 
-            # for a partial last window the target days sit at the tail of the
-            # 360-step output (offset = step - window_size)
-            pred_offset = step - window_size
+            # model always outputs MAX_PREDICTION_LENGTH steps with predict=True;
+            # for a partial last window the target days sit at the tail of that output
+            pred_offset = self.MAX_PREDICTION_LENGTH - window_size
 
             for i in range(window_size):
                 row  = test_window.iloc[i]

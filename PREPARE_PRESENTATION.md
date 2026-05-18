@@ -134,12 +134,71 @@ Before building the dataset, we apply two preprocessing steps. First, skewed mac
 
 The target is normalized using an `EncoderNormalizer` with a softplus transformation. This normalizer is computed from the encoder context window of each sample, so it is inherently local and avoids any global scaling that would introduce look-ahead bias.
 
-## Architecture and Hyperparameters
+## Training Protocol
 
-**IMPORTANT** : this is all subject to change, havent done hyperparam tuning yet! 
+The training split is itself divided into a fitting window and a validation window: the last `MAX_PREDICTION_LENGTH = 12` rows of the training data are held out as a true out-of-sample validation set. This means the early stopping criterion (monitored on `val_loss`) reflects genuine out-of-sample fit within the training period rather than in-sample fit. Early stopping has patience 5 and a minimum improvement threshold of 0.01; the best checkpoint is saved and reloaded for inference. Training runs for at most 50 epochs. Optionally, training curves can be logged to Weights & Biases via a `WandbLogger`.
+
+## Inference: Rolling-Window Prediction
+
+The test period is typically longer than `MAX_PREDICTION_LENGTH`, so predictions are generated in non-overlapping 12-month windows. For each window, the context passed to the model is the full training set concatenated with all test months up to the current window. Crucially, any test observations that fall within the context are replaced by the model's own previous predictions, never by the true realised values — the same assumption made by the AR and ARIMA benchmarks. This ensures the multi-step forecasts are genuinely out-of-sample and that the three models are evaluated on the same information set.
+
+After inference, log-transformed targets (CPI, PAYEMS, INDPRO, GDP) are back-transformed via exponentiation. Results are then resampled to native frequency (monthly for most targets, quarterly for GDP) and saved alongside the benchmark predictions.
+
+# Forecasts
+Bringing it all together
+
+# Hyperparameter Tuning:
+
+After discussing the topic with David, he told us to fix all of the hyperparams we can think of today, and we could do the following hyperparam strategies:
+
+1. define a **bayesian optimisation** approch using `optuna`
+
+2. define grid where the possible hyperparams are set, then sweep them, to hyperparam tuning.
 
 
-We use the `pytorch-forecasting` implementation of the TFT with the following hyperparameters:
+Hence, these are the Hyperparams we define today:
+
+
+## Defining our Hyperparams we want to tune: 
+
+**IMPORTANT:** these hyperparams need to be re-tuned for each target. these are different approaches, and thus require different solutions -> different hyperparams.
+
+When constructing the hyperparam grid, distinguish two classes:
+- **Problem-meaningful** (grid): values with a natural, interpretable range — e.g. forecast horizon (1, 3, 6, 12 months), speech window (3, 6, 12 months), lag periods.
+- **Statistical / arbitrary** (log-uniform or wide range): learning rate, hidden sizes, dropout, etc.
+
+### (A) Data & Feature Params ← *problem-meaningful grid*
+
+- `max_prediction_length` — **forecast horizon**, e.g. {1, 6, 12} months; must match AR/ARIMA for comparability
+- `max_encoder_length` — context window, e.g. {12, 24, 36} months (currently 24)
+- `min_encoder_length` — lower bound on encoder, e.g. {8, 12}
+- `SPEECH_WINDOW_MONTHS` — rolling look-back for speech aggregation, e.g. {3, 6, 12} (**Anna flagged this as important!**)
+- `N_PCA` — PCA components per speech, e.g. {10, 20, 30} (currently 20; embedding_manager uses 5)
+<!-- - lag periods — which lags to include, e.g. subsets of {1, 2, 6, 12} -->
+- **embedding type**:
+    - FinBERT (truncated CLS / chunk-mean)
+    - FOMC-RoBERTa (truncated CLS / chunk-mean)
+    - no embeddings (macro-only baseline)
+- **normalizer** (per target, since series differ in scale/stationarity):
+    - `EncoderNormalizer(transformation="None")`  — no transform (after getting new macro data)  
+    - `GroupNormalizer` — global scaling across the group; tested before, currently dropped
+
+### (B) TFT Architecture Params ← *log-uniform / wide range*
+
+- `lstm_layers` — {1, 2, 4} (currently 4; was 2)
+- `hidden_size` — {16, 32, 64, 128} (currently 64; was 16)
+- `attention_head_size` — {1, 2, 4} (currently 2)
+- `hidden_continuous_size` — {8, 16, 32} (currently 8; basic.py uses 32)
+- `dropout` — uniform in [0.05, 0.4] (currently 0.2)
+
+### (C) Training / Optimisation Params ← *log-uniform*
+
+- `learning_rate` — log-uniform in [1e-4, 0.1] (currently 0.03)
+- `batch_size` — {16, 32, 64, 128} (currently 128 val, 16 train)
+- `max_epochs` — fixed at 50 (tuned via early stopping, not a sweep param)
+
+
+<!-- We use the `pytorch-forecasting` implementation of the TFT with the following hyperparameters:
 
 | Parameter | Value | Rationale |
 |---|---|---|
@@ -153,20 +212,7 @@ We use the `pytorch-forecasting` implementation of the TFT with the following hy
 | `output_size` | 1 | point forecast |
 | `loss` | SMAPE | scale-independent, comparable across targets |
 | `learning_rate` | 0.03 | |
-| `gradient_clip_val` | 0.25 | prevents exploding gradients |
-
-## Training Protocol
-
-The training split is itself divided into a fitting window and a validation window: the last `MAX_PREDICTION_LENGTH = 12` rows of the training data are held out as a true out-of-sample validation set. This means the early stopping criterion (monitored on `val_loss`) reflects genuine out-of-sample fit within the training period rather than in-sample fit. Early stopping has patience 5 and a minimum improvement threshold of 0.01; the best checkpoint is saved and reloaded for inference. Training runs for at most 50 epochs. Optionally, training curves can be logged to Weights & Biases via a `WandbLogger`.
-
-## Inference: Rolling-Window Prediction
-
-The test period is typically longer than `MAX_PREDICTION_LENGTH`, so predictions are generated in non-overlapping 12-month windows. For each window, the context passed to the model is the full training set concatenated with all test months up to the current window. Crucially, any test observations that fall within the context are replaced by the model's own previous predictions, never by the true realised values — the same assumption made by the AR and ARIMA benchmarks. This ensures the multi-step forecasts are genuinely out-of-sample and that the three models are evaluated on the same information set.
-
-After inference, log-transformed targets (CPI, PAYEMS, INDPRO, GDP) are back-transformed via exponentiation. Results are then resampled to native frequency (monthly for most targets, quarterly for GDP) and saved alongside the benchmark predictions.
-
-# Forecasts
-Bringing it all together
+| `gradient_clip_val` | 0.25 | prevents exploding gradients | -->
 
 ## Evaluation Protocol
 

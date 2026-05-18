@@ -8,25 +8,33 @@ since everything will be in terms of rates with similar magnitudes
 Below, I list all vars and their transformation
 
 CPI     log diff
-PCEPI   log diff
+PCEPI   log diff => alternative to CPI, so don't use it
 GDP     log diff
 
-EUR
+EUR     => don't use since only since 2000s of course
 GBP
 YEN
 
 FFR
-SOFR
+SOFR    => too short, only since 2018, so exclude
 
-PAYEMS  log diff
-JTSJOL  log diff
+labor amrket:
+PAYEMS  log diff 
+JTSJOL  => too short, only since 2000, so exclude
 UNRATE  
+AWHMAN  log diff 
+        Avg hours worked  in manufacturing
 
 T10Y2
 WACLC
 
 UMCSENT
 INDPRO  log diff
+
+USALOLITONOSTSAM    log diff
+                    "Composite Leading Indicator (CLI) Normalized for United States" from the OECD (available at FRED)
+                    from oecd website: "The OECD Composite Leading Indicators (CLIs) are designed to anticipate turning points and economic fluctuations relative to trend."
+                    see https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html
 
 """
 
@@ -88,6 +96,8 @@ payems = fred.get_series('PAYEMS')
 jtsjol = fred.get_series('JTSJOL')
 # unrate
 unrate = fred.get_series('UNRATE')
+# Average Weekly Hours of Production and Nonsupervisory Employees, Manufacturing (AWHMAN)
+awhman = fred.get_series('AWHMAN')
 
 
 # some financial stuff
@@ -103,6 +113,8 @@ umcsent = fred.get_series('UMCSENT')
 # Industrial Production Index
 indpro = fred.get_series('INDPRO')
 
+# Composite Leading Indicator (CLI) Normalized for United States
+usacli = fred.get_series('USALOLITONOSTSAM')
 
 
 # --------------------------------------------------------
@@ -114,9 +126,10 @@ pcepi_logdiff = np.log(pcepi).diff(1)
 gdp_logdiff = np.log(gdp).diff(1)    
 payems_logdiff = np.log(payems).diff(1)
 jtsjol_logdiff = np.log(jtsjol).diff(1)
+awhman_logdiff = np.log(awhman).diff(1)
 indpro_logdiff = np.log(indpro).diff(1)
 waclc_logdiff = np.log(waclc).diff(1)
-
+usacli_log_diff = np.log(usacli).diff(1)
 
 
 # --------------------------------------------------------
@@ -125,14 +138,15 @@ waclc_logdiff = np.log(waclc).diff(1)
 
 # assemble into quarterly, monthly, daily and weekly df
 qrt_series = [gdp_logdiff]
-monthly_series = [cpi_logdiff, pcepi_logdiff, payems_logdiff, jtsjol_logdiff, umcsent, indpro_logdiff, unrate]
+monthly_series = [cpi_logdiff, pcepi_logdiff, payems_logdiff, jtsjol_logdiff, 
+                  umcsent, indpro_logdiff, unrate, awhman_logdiff, usacli_log_diff]
 daily_series = [eur, gbp, yen, ffr, sofr, t10y2y]
 weekly_series = [waclc_logdiff]
 
 # define names of each column
 # we keep the names as before so not to break the code
 qrt_names = ['GDP']
-monthly_names = ['CPI', 'PCEPI', 'PAYEMS', 'JTSJOL', 'UMCSENT', 'INDPRO', 'UNRATE']
+monthly_names = ['CPI', 'PCEPI', 'PAYEMS', 'JTSJOL', 'UMCSENT', 'INDPRO', 'UNRATE', 'AWHMAN', 'USACLI']
 daily_names = ['EUR', 'GBP', 'YEN', 'FFR', 'SOFR', 'T10Y2Y']
 weekly_names = ['WALCL']
 

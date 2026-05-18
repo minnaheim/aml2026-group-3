@@ -25,7 +25,7 @@
 - [ ] Also run using the 512 mean and CLS versions, not just full speeches   
       
 ### TFT
-- [ ] Additional metadata from FRED
+- [x] Additional metadata from FRED
 - [x] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
 - [ ] Hyperparameter tuning (WIP)
 - [x] **Speaker characteristics!!** We can do: position in fed, year of birth, education, gender, minority, district, ...
