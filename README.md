@@ -33,6 +33,7 @@ Below you will find a project overview of the most important files.
 │   │   ├── d_tft_runner.py             # TFT runner (PyTorch Forecasting)
 │   │   ├── e_main.py                   # orchestrates all runners, logs to W&B, saves outputs
 │   │   ├── f_run_ablation.py           # ablation study runner
+│   │   ├── g_tune_hyperparams.py       # Bayesian HP tuning (Optuna/TPE), per-target
 │   │   └── plot_experiments.py         # plotting utilities for experiment results
 │   └── notebooks/                      # exploratory notebooks and scripts (not part of main pipeline)
 ```
@@ -79,3 +80,26 @@ Specific runs only:
 ```bash
 python src/holdout-validation/f_run_ablation.py --runs macro_only fomc_roberta_mean --device cuda
 ```
+
+---
+
+## Hyperparameter tuning (Bayesian / Optuna)
+
+Quick smoke test (3 trials):
+```bash
+python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 3 --device cuda
+```
+
+Full per-target sweep (GPU):
+```bash
+python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --device cuda
+python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --device cuda
+python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --device cuda
+```
+
+With embeddings (once runtime is known):
+```bash
+python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 50 --embedding fomc-roberta --device cuda
+```
+
+Best params are saved to `out/tuning/{target}/best_params.json`. The study is checkpointed to `out/tuning/{target}/optuna_study.pkl` and resumes automatically if re-run.

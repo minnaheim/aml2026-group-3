@@ -14,8 +14,9 @@ import json
 # AR Runner
 # ---------------------------------------------------------------------------
 class ARRunner:
-    def __init__(self, dfb, cache_dir: Path | None = None):
+    def __init__(self, dfb, cache_dir: Path | None = None, max_prediction_length: int = 12):
         self.dfb = dfb
+        self.max_prediction_length = max_prediction_length
         self._cache_dir = cache_dir or (Path(dfb.path) / "out" / "cv" / "ar_orders")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -109,8 +110,8 @@ class ARRunner:
 
         return order, seasonal_order
     
-        # step = 12 because MAX_ENCODER_LENGTH
-    def predict(self, splits, target: str = "CPI", fold: int = 0, step: int = 12) -> pd.DataFrame:
+    def predict(self, splits, target: str = "CPI", fold: int = 0, step: int | None = None) -> pd.DataFrame:
+        step = step if step is not None else self.max_prediction_length
         train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
         test  = self.dfb.get_data(splits, train=False, model="AR", target=target, fold=fold)
 
@@ -155,8 +156,9 @@ class ARRunner:
 class ARIMARunner:
     """5-fold CV ARIMA with auto_arima order search (cached per fold/variable)."""
 
-    def __init__(self, dfb, cache_dir: Path | None = None):
+    def __init__(self, dfb, cache_dir: Path | None = None, max_prediction_length: int = 12):
         self.dfb = dfb
+        self.max_prediction_length = max_prediction_length
         # saving orders & their performance
         self._cache_dir = cache_dir or (Path(dfb.path) / "out" / "cv" / "arima_orders")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
@@ -253,8 +255,8 @@ class ARIMARunner:
 
         return order, seasonal_order
 
-    # step = 12 because MAX_ENCODER_LENGTH
-    def predict(self, splits, target: str = "CPI", fold: int = 0, step: int = 12) -> pd.DataFrame:
+    def predict(self, splits, target: str = "CPI", fold: int = 0, step: int | None = None) -> pd.DataFrame:
+        step = step if step is not None else self.max_prediction_length
         train = self.dfb.get_data(splits, train=True,  model="ARIMA", target=target, fold=fold)
         test  = self.dfb.get_data(splits, train=False, model="ARIMA", target=target, fold=fold)
 

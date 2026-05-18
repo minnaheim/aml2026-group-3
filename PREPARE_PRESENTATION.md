@@ -170,15 +170,25 @@ When constructing the hyperparam grid, distinguish two classes:
 ### (A) Data & Feature Params ← *problem-meaningful grid*
 
 - `max_prediction_length` — **forecast horizon**, e.g. {1, 6, 12} months; must match AR/ARIMA for comparability
-- `max_encoder_length` — context window, e.g. {12, 24, 36} months (currently 24)
+- `max_encoder_length` — context window, e.g. {12, 24, 36,48} months (currently 24)
 - `min_encoder_length` — lower bound on encoder, e.g. {8, 12}
 - `SPEECH_WINDOW_MONTHS` — rolling look-back for speech aggregation, e.g. {3, 6, 12} (**Anna flagged this as important!**)
-- `N_PCA` — PCA components per speech, e.g. {10, 20, 30} (currently 20; embedding_manager uses 5)
 <!-- - lag periods — which lags to include, e.g. subsets of {1, 2, 6, 12} -->
 - **embedding type**:
     - FinBERT (truncated CLS / chunk-mean)
     - FOMC-RoBERTa (truncated CLS / chunk-mean)
     - no embeddings (macro-only baseline)
+- **dimensionality reduction of speeches**:
+     - Speech Embeddings as is (no dim reduction)
+         - without linear layer
+         - with linear layer
+     — PCA components per speech `N_PCA`, e.g. {5, 10, 20, 30} 
+     - Factor Analysis also `N_PCA`(just use same factor)
+- **embedding aggregator**:
+    - mean 
+    - (exponential) decay
+    - attention-based
+    - attention- & context-based
 - **normalizer** (per target, since series differ in scale/stationarity):
     - `EncoderNormalizer(transformation="None")`  — no transform (after getting new macro data)  
     - `GroupNormalizer` — global scaling across the group; tested before, currently dropped
@@ -196,23 +206,6 @@ When constructing the hyperparam grid, distinguish two classes:
 - `learning_rate` — log-uniform in [1e-4, 0.1] (currently 0.03)
 - `batch_size` — {16, 32, 64, 128} (currently 128 val, 16 train)
 - `max_epochs` — fixed at 50 (tuned via early stopping, not a sweep param)
-
-
-<!-- We use the `pytorch-forecasting` implementation of the TFT with the following hyperparameters:
-
-| Parameter | Value | Rationale |
-|---|---|---|
-| `max_encoder_length` | 24 months | 2-year context window |
-| `max_prediction_length` | 12 months | 1-year forecast horizon, matching AR/ARIMA |
-| `lstm_layers` | 4 | deeper sequence encoding |
-| `hidden_size` | 64 | main model width |
-| `attention_head_size` | 2 | multi-head self-attention in decoder |
-| `dropout` | 0.2 | regularisation |
-| `hidden_continuous_size` | 8 | embedding width for continuous variables |
-| `output_size` | 1 | point forecast |
-| `loss` | SMAPE | scale-independent, comparable across targets |
-| `learning_rate` | 0.03 | |
-| `gradient_clip_val` | 0.25 | prevents exploding gradients | -->
 
 ## Evaluation Protocol
 

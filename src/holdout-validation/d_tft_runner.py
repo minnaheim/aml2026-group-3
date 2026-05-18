@@ -24,16 +24,23 @@ LAG_PERIODS = [1, 2, 6, 12]
 #ANNA# LOG_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"}
 
 
-class TFTRunner:
-    # hyperparams matching initial tryout at  tft-macro.ipynb
-    # UPDATED: Change from days to months
-    MAX_ENCODER_LENGTH = 24 # 2-year monthly lookback
-    MAX_PREDICTION_LENGTH = 12 # 12-month forecast horizon
-    PATIENCE = 15
-    MAX_EPOCHS = 50
-    LEARNING_RATE = 0.03
+HPARAMS_DEFAULTS = {
+    "max_encoder_length":     24,
+    "max_prediction_length":  12,
+    "min_encoder_length":     8,
+    "patience":               15,
+    "max_epochs":             50,
+    "learning_rate":          0.03,
+    "lstm_layers":            4,
+    "hidden_size":            64,
+    "attention_head_size":    2,
+    "hidden_continuous_size": 8,
+    "dropout":                0.2,
+    "normalizer":             "encoder_none",  # "encoder_none" | "group"
+}
 
-    def __init__(self, dfb):
+class TFTRunner:
+    def __init__(self, dfb, hparams: dict | None = None):
         """
         Parameters
         ----------
@@ -42,8 +49,14 @@ class TFTRunner:
             dfb.pca_cols will be non-empty and those columns will automatically
             be included as time-varying unknown reals.  Otherwise the runner
             operates in macro-only mode.
+        hparams : dict, optional
+            Override any key from HPARAMS_DEFAULTS.
         """
         self.dfb = dfb
+        self.hparams = {**HPARAMS_DEFAULTS, **(hparams or {})}
+        # convenience aliases (read-only shortcuts used in predict())
+        self.MAX_ENCODER_LENGTH    = self.hparams["max_encoder_length"]
+        self.MAX_PREDICTION_LENGTH = self.hparams["max_prediction_length"]
 
     def _add_tft_vars(self, df: pd.DataFrame, target: str) -> pd.DataFrame:
         """Add series_id, time_idx, calendar features, monthly lags, and target metadata."""
@@ -137,21 +150,28 @@ class TFTRunner:
          # so val_loss reflects out-of-sample fit within the training period                                                                                                                                                                           
         fit_df = train_df.iloc[:-self.MAX_PREDICTION_LENGTH]           
 
+        # select normalizer based on hparam
+        if self.hparams["normalizer"] == "group":
+            from pytorch_forecasting.data import GroupNormalizer
+            normalizer = GroupNormalizer(groups=["series_id"])
+        else:
+            normalizer = EncoderNormalizer(transformation=None)  # cannot use softplus since log-diff can be negative
+
         training = TimeSeriesDataSet(
             data=fit_df,
-            # data=train_df,
             time_idx='time_idx',
             target=target,
             group_ids=['series_id'],
-            max_encoder_length=self.MAX_ENCODER_LENGTH,
-            max_prediction_length=self.MAX_PREDICTION_LENGTH,
+            max_encoder_length=self.hparams["max_encoder_length"],
+            min_encoder_length=self.hparams["min_encoder_length"],
+            max_prediction_length=self.hparams["max_prediction_length"],
             static_categoricals=['series_id'] + meta_cat_cols,
             static_reals=meta_real_cols,
             time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday',
                                       # fomc dates known in advance — only included with speeches
                                       *fomc_known_present],
             time_varying_unknown_reals=[*covariates, *lag_cols, *pca_cols_present, *dissent_cols_present],
-            target_normalizer=EncoderNormalizer(transformation=None), # cannot use softplus anymrore since log diff can be negative; None since data SHOULD be mean reverting
+            target_normalizer=normalizer,
             add_relative_time_idx=True,
             add_target_scales=True,
             add_encoder_length=True,
@@ -170,7 +190,7 @@ class TFTRunner:
         callbacks = [
             # changed this to val_loss -> train-loss will usually increase, even if val_loss stops
             EarlyStopping(monitor='val_loss',
-                          patience=self.PATIENCE, verbose=False, mode='min'),
+                          patience=self.hparams["patience"], verbose=False, mode='min'),
         ]
         if use_wandb:
             callbacks.append(LearningRateMonitor())
@@ -185,11 +205,10 @@ class TFTRunner:
 
         accelerator = device if device in ('cuda', 'mps') else 'cpu'
         trainer = pl.Trainer(
-            max_epochs=self.MAX_EPOCHS,
+            max_epochs=self.hparams["max_epochs"],
             accelerator=accelerator,
             devices=1,
             gradient_clip_val=0.25,
-            # limit_train_batches=60,
             callbacks=callbacks,
             enable_model_summary=True,
             logger=logger,
@@ -197,12 +216,12 @@ class TFTRunner:
 
         tft = TemporalFusionTransformer.from_dataset(
             training_ds,
-            learning_rate=self.LEARNING_RATE,
-            lstm_layers=4, # before was 2
-            hidden_size=64, # before this was 16
-            attention_head_size=2,
-            dropout=0.2,
-            hidden_continuous_size=8,
+            learning_rate=self.hparams["learning_rate"],
+            lstm_layers=self.hparams["lstm_layers"],
+            hidden_size=self.hparams["hidden_size"],
+            attention_head_size=self.hparams["attention_head_size"],
+            dropout=self.hparams["dropout"],
+            hidden_continuous_size=self.hparams["hidden_continuous_size"],
             output_size=1,
             loss=SMAPE(),
             log_interval=10,

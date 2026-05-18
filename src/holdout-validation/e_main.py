@@ -185,7 +185,7 @@ def main():
     )
     
     parser.add_argument(
-        "--horizon", type=int, default=12, choices=[1, 6, 9, 12],
+        "--horizon", type=int, default=12, choices=[1, 6, 12],
         help="Forecast horizon in months (default: 12)",
     )
     
@@ -203,6 +203,19 @@ def main():
     parser.add_argument(
         "--run-name", default="default",
         help="Unique name for this run (used for output subfolder)",
+    )
+
+    # ── TFT hyperparams (override defaults from HPARAMS_DEFAULTS) ────────────
+    parser.add_argument("--encoder-length",         type=int,   default=24,   help="max_encoder_length (default 24)")
+    parser.add_argument("--speech-window",          type=int,   default=12,   help="SPEECH_WINDOW_MONTHS (default 12)")
+    parser.add_argument("--lstm-layers",            type=int,   default=4,    help="TFT lstm_layers (default 4)")
+    parser.add_argument("--hidden-size",            type=int,   default=64,   help="TFT hidden_size (default 64)")
+    parser.add_argument("--hidden-continuous-size", type=int,   default=8,    help="TFT hidden_continuous_size (default 8)")
+    parser.add_argument("--dropout",                type=float, default=0.2,  help="TFT dropout (default 0.2)")
+    parser.add_argument("--lr",                     type=float, default=0.03, help="learning rate (default 0.03)")
+    parser.add_argument(
+        "--normalizer", default="encoder_none", choices=["encoder_none", "group"],
+        help="Target normalizer: encoder_none = EncoderNormalizer(None), group = GroupNormalizer (default: encoder_none)",
     )
     
     args = parser.parse_args()
@@ -227,7 +240,19 @@ def main():
     # ── 1. split the data acc. to data-frame-builder ─────────────────────────
     # dissents are loaded explicitly so those features appear in process_data()
     # regardless of whether embeddings are used
-    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation)
+    hparams = {
+        "max_prediction_length":  args.horizon,
+        "max_encoder_length":     args.encoder_length,
+        "speech_window_months":   args.speech_window,
+        "lstm_layers":            args.lstm_layers,
+        "hidden_size":            args.hidden_size,
+        "hidden_continuous_size": args.hidden_continuous_size,
+        "dropout":                args.dropout,
+        "learning_rate":          args.lr,
+        "normalizer":             args.normalizer,
+    }
+
+    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window)
     dfb.load_fomc_dissent()
     df  = dfb.process_data()
     splits, holdout = dfb.generate_split(df)
@@ -255,9 +280,9 @@ def main():
         f"({len(holdout)} rows)\n"
     )
     # initiate runners
-    ar_runner    = ARRunner(dfb)
-    arima_runner = ARIMARunner(dfb)
-    tft_runner   = TFTRunner(dfb)
+    ar_runner    = ARRunner(dfb,    max_prediction_length=hparams["max_prediction_length"])
+    arima_runner = ARIMARunner(dfb, max_prediction_length=hparams["max_prediction_length"])
+    tft_runner   = TFTRunner(dfb,   hparams=hparams)
 
     # results[model][fold_num][target] = predictions DataFrame
     results = {"TFT": {s["fold"]: {} for s in splits}}
@@ -276,13 +301,13 @@ def main():
             if not args.no_baselines:
                 print("\n[AR]")
                 ar_order, ar_seasonal = ar_runner.run(splits, target=target, fold=fold_idx)
-                ar_df = ar_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
+                ar_df = ar_runner.predict(splits, target=target, fold=fold_idx)
                 results["AR"][fold_num][target] = ar_df
                 print(f"  → {len(ar_df)} predictions (order={ar_order}, seasonal={ar_seasonal})")
 
                 print("\n[ARIMA]")
                 arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=fold_idx)
-                arima_df = arima_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
+                arima_df = arima_runner.predict(splits, target=target, fold=fold_idx)
                 results["ARIMA"][fold_num][target] = arima_df
                 print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
@@ -300,7 +325,6 @@ def main():
             print("\n[TFT – inference]")
             tft_df = tft_runner.predict(
                 ckpt, splits, target=target, fold=fold_idx, device=args.device,
-                step=args.horizon, # includes horizon
             )
             results["TFT"][fold_num][target] = tft_df
             print(f"  → {len(tft_df)} predictions")
