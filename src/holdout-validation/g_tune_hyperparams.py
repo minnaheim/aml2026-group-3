@@ -14,6 +14,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 import numpy as np
 from pathlib import Path
 
@@ -24,10 +25,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from b_data_frame_builder import DataFrameBuilder
 from d_tft_runner         import TFTRunner
 from a_embedding_manager  import EmbeddingManager
-from e_main               import compute_metrics
+from e_main               import compute_metrics, _setup_wandb
 
-# defines hyperparam grid 
-def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path) -> float:
+# defines hyperparam grid
+def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wandb: bool = True) -> float:
     max_prediction_length = trial.suggest_categorical("max_prediction_length", [1, 6, 12])
     hparams = {
         # data / feature params
@@ -78,9 +79,11 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path) -> floa
 
     for fold_idx, s in enumerate(splits):
         try:
+            run_name = f"trial-{trial.number}-{args.target}-fold{fold_idx}"
             ckpt = runner.run(
                 splits, target=args.target, fold=fold_idx,
-                use_tqdm=False, use_wandb=False, device=args.device,
+                use_tqdm=False, use_wandb=use_wandb, device=args.device,
+                run_name=run_name,
             )
             preds = runner.predict(
                 ckpt, splits, target=args.target, fold=fold_idx,
@@ -92,25 +95,38 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path) -> floa
             # report a large loss so Optuna deprioritises this region
             print(f"  [trial {trial.number} fold {fold_idx}] failed: {e}")
             maes.append(1e6)
+        finally:
+            # close each W&B run explicitly so the next trial starts a fresh one
+            if use_wandb:
+                import wandb
+                wandb.finish()
 
     return float(np.mean(maes))
 
 
 def main():
+    # note: argparse converts hyphens to underscores, so --n-folds → args.n_folds, etc.
     parser = argparse.ArgumentParser(description="Bayesian HP tuning for TFT (Optuna/TPE)")
-    parser.add_argument("--target",      required=True, choices=["CPI", "UNRATE", "GDP"])
-    parser.add_argument("--n-trials",    type=int,   default=50)
-    parser.add_argument("--n-folds",     type=int,   default=2,   help="CV folds per trial (default 2 for speed)")
-    parser.add_argument("--device",      default="cpu", choices=["cpu", "mps", "cuda"])
+    parser.add_argument("--target",      required=True, choices=["CPI", "UNRATE", "GDP"])          # → args.target
+    parser.add_argument("--n-trials",    type=int,   default=50)                                   # → args.n_trials
+    parser.add_argument("--n-folds",     type=int,   default=2,   help="CV folds per trial (default 2 for speed)")  # → args.n_folds
+    parser.add_argument("--device",      default="cpu", choices=["cpu", "mps", "cuda"])            # → args.device
     parser.add_argument("--embedding",   default=None,
-                        choices=["fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka"])
+                        choices=["fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka"]) # → args.embedding
     parser.add_argument("--aggregation", default="mean",
-                        choices=["mean", "decay", "attention", "context_attention"])
-    parser.add_argument("--reduction",   default="pca", choices=["pca", "fa", "none"])
+                        choices=["mean", "decay", "attention", "context_attention"])                # → args.aggregation
+    parser.add_argument("--reduction",   default="pca", choices=["pca", "fa", "none"])             # → args.reduction
+    parser.add_argument("--wandb", action="store_true", default=False)                             # → args.wandb
     args = parser.parse_args()
 
+    if args.wandb:
+        _setup_wandb()
+
     root    = Path(__file__).parent.parent.parent
-    out_dir = root / "out" / "tuning" / args.target
+    # separate output dir per target + embedding + aggregation + reduction so studies don't overwrite each other
+    emb_tag = args.embedding if args.embedding else "macro_only"
+    run_tag = f"{emb_tag}_{args.aggregation}_{args.reduction}" if args.embedding else emb_tag
+    out_dir = root / "out" / "tuning" / args.target / run_tag
     out_dir.mkdir(parents=True, exist_ok=True)
 
     study_path = out_dir / "optuna_study.pkl"
@@ -124,11 +140,15 @@ def main():
     else:
         study = optuna.create_study(direction="minimize", sampler=TPESampler(seed=42))
 
+    t0 = time.time()
     study.optimize(
-        lambda trial: objective(trial, args, root),
+        lambda trial: objective(trial, args, root, use_wandb=args.wandb),
         n_trials=args.n_trials,
         show_progress_bar=True,
     )
+    elapsed      = time.time() - t0
+    elapsed_min  = elapsed / 60
+    per_trial    = elapsed_min / args.n_trials
 
     # save study for resuming later
     import pickle
@@ -136,12 +156,16 @@ def main():
         pickle.dump(study, f)
 
     best = study.best_params
-    best["_best_mae"] = study.best_value
+    best["_best_mae"]           = study.best_value
+    best["_n_trials"]           = args.n_trials
+    best["_total_minutes"]      = round(elapsed_min, 1)
+    best["_minutes_per_trial"]  = round(per_trial, 1)
     best_path = out_dir / "best_params.json"
     with open(best_path, "w") as f:
         json.dump(best, f, indent=2)
 
     print(f"\nBest MAE : {study.best_value:.5f}")
+    print(f"Runtime  : {elapsed_min:.1f} min total  |  {per_trial:.1f} min/trial  ({args.n_trials} trials)")
     print(f"Best params saved → {best_path}")
     print(json.dumps(best, indent=2))
 

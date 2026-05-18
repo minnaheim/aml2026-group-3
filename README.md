@@ -85,21 +85,68 @@ python src/holdout-validation/f_run_ablation.py --runs macro_only fomc_roberta_m
 
 ## Hyperparameter tuning (Bayesian / Optuna)
 
-Quick smoke test (3 trials):
+<!-- Quick smoke test (3 trials):
 ```bash
 python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 3 --device cuda
-```
+``` -->
 
-Full per-target sweep (GPU):
+**Observed runtime (Renku, CUDA):** ~5.5 min for 3 trials → ~1.8 min/trial. Full 50-trial sweep ≈ 1.5 h per target.
+
+Best params are saved to `out/tuning/{target}/{run_tag}/best_params.json`. The study is checkpointed to `out/tuning/{target}/{run_tag}/optuna_study.pkl` and resumes automatically if re-run. `run_tag` is `macro_only` or `{embedding}_{aggregation}_{reduction}`.
+
+---
+
+### Macro-only (no embeddings) — ~4.5 h total
 ```bash
 python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --device cuda
 python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --device cuda
 python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --device cuda
+
+# fomc-roberta + mean aggregation
+python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda
+python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda
+python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda
 ```
 
-With embeddings (once runtime is known):
+
+Once that is done, look at hyperparam, what stayed the same from all the runs, fix that!
+
+
+
+<!-- ### fomc-roberta — ~4.5 h total (4 configs × 3 targets)
 ```bash
-python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 50 --embedding fomc-roberta --device cuda
-```
+# mean aggregation
+python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda
+python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda
+python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda
+``` -->
 
-Best params are saved to `out/tuning/{target}/best_params.json`. The study is checkpointed to `out/tuning/{target}/optuna_study.pkl` and resumes automatically if re-run.
+<!-- 
+# # mean + factor analysis
+# python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction fa --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction fa --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction fa --device cuda
+
+# # decay aggregation
+# python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --embedding fomc-roberta --aggregation decay --reduction pca --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding fomc-roberta --aggregation decay --reduction pca --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding fomc-roberta --aggregation decay --reduction pca --device cuda
+
+# # attention aggregation
+# python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --embedding fomc-roberta --aggregation attention --reduction pca --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding fomc-roberta --aggregation attention --reduction pca --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding fomc-roberta --aggregation attention --reduction pca --device cuda
+# ```
+
+# ---
+
+# ### finbert — ~9 h total (2 configs × 3 targets)
+# ```bash
+# python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --embedding finbert --aggregation mean --reduction pca --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding finbert --aggregation mean --reduction pca --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding finbert --aggregation mean --reduction pca --device cuda
+
+# python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --embedding finbert --aggregation decay --reduction pca --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding finbert --aggregation decay --reduction pca --device cuda
+# python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding finbert --aggregation decay --reduction pca --device cuda
+# ``` -->

@@ -185,7 +185,8 @@ class TFTRunner:
         return training, train_dl, val_dl
 
     def train_tft(self, training_ds, train_dl, val_dl,
-                  use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu'):
+                  use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu',
+                  run_name: str = 'tft-holdout'):
         """Build trainer + TFT, fit, return best checkpoint path."""
         callbacks = [
             # changed this to val_loss -> train-loss will usually increase, even if val_loss stops
@@ -200,8 +201,10 @@ class TFTRunner:
 
         logger = False
         if use_wandb:
+            import wandb
             from lightning.pytorch.loggers import WandbLogger
-            logger = WandbLogger(project='tft', name='tft-holdout')
+            logger = WandbLogger(project='tft', name=run_name)
+            print(f"  W&B run: {logger.experiment.url}")
 
         accelerator = device if device in ('cuda', 'mps') else 'cpu'
         trainer = pl.Trainer(
@@ -285,7 +288,8 @@ class TFTRunner:
         return importance_dfs
 
     def run(self, splits, target: str, fold: int = 0, batch_size: int = 128,
-            use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu') -> str:
+            use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu',
+            run_name: str = 'tft-holdout') -> str:
         """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
         self._train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
         print("Got data from data_frame_builder...")
@@ -295,7 +299,7 @@ class TFTRunner:
 
         self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
         print("Created TimeSeriesDataSet for tft...")
-        return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
+        return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device, run_name)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
                 batch_size: int = 128, device: str = 'cpu', step: int | None = None) -> pd.DataFrame:
