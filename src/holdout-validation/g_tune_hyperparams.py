@@ -7,8 +7,7 @@ and returns the mean MAE. Best params saved to out/tuning/{target}/best_params.j
 
 Usage:
     python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 3 --device cpu
-    python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 50 --device cuda
-    # with embeddings (once runtime is known):
+    python src/holdout-validation/g_tune_hyperparams.py --target GDP --n-trials 50 --horizon 12 --device mps
     python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 50 --embedding fomc-roberta --device cuda
 """
 import argparse
@@ -29,17 +28,22 @@ from e_main               import compute_metrics, _setup_wandb
 
 # defines hyperparam grid
 def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wandb: bool = True) -> float:
-    max_prediction_length = trial.suggest_categorical("max_prediction_length", [3, 6, 12])
+    # speech-specific params only searched when embeddings are active — no wasted trials for macro-only
+    if args.embedding is not None:
+        speech_window = trial.suggest_int("speech_window_months", 3, 12)
+        n_pca         = trial.suggest_int("n_pca", 5, 30)
+    else:
+        speech_window = 12  # irrelevant for macro-only, fixed to avoid polluting the search space
+        n_pca         = 5   # irrelevant for macro-only
+
     hparams = {
         # data / feature params
         "max_encoder_length":     trial.suggest_int("max_encoder_length", 12, 48),
-        "max_prediction_length":  max_prediction_length,
-        "speech_window_months":   trial.suggest_int("speech_window_months", 3, 12),
-        "n_pca":                  trial.suggest_int("n_pca", 5, 30),
+        "max_prediction_length":  args.horizon,   # fixed — horizon is a research variable, not a tuning param
         # architecture
-        "hidden_size":            trial.suggest_categorical("hidden_size", [16, 32, 64, 128]),
-        "hidden_continuous_size": trial.suggest_categorical("hidden_continuous_size", [8, 16, 32]),
-        "lstm_layers":            trial.suggest_categorical("lstm_layers", [1, 2, 4]),
+        "hidden_size":            trial.suggest_categorical("hidden_size", [16, 32, 64, 128, 256]),
+        "hidden_continuous_size": trial.suggest_categorical("hidden_continuous_size", [2, 4, 8, 16, 32]),
+        "lstm_layers":            trial.suggest_categorical("lstm_layers", [1, 2, 4, 8, 16]),
         "dropout":                trial.suggest_float("dropout", 0.05, 0.4),
         # optimisation
         "learning_rate":          trial.suggest_float("learning_rate", 1e-4, 0.1, log=True),
@@ -52,9 +56,6 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wan
         "patience":               15,
     }
     # TODO: why define everything separately and let it run here, not in original pipeline?
-
-    speech_window = hparams["speech_window_months"]
-    n_pca         = hparams["n_pca"]
 
     dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=speech_window)
     dfb.load_fomc_dissent()
@@ -87,7 +88,7 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wan
             )
             preds = runner.predict(
                 ckpt, splits, target=args.target, fold=fold_idx,
-                device=args.device, step=max_prediction_length,
+                device=args.device, step=args.horizon,
             )
             m = compute_metrics(preds)
             maes.append(m["MAE"])
@@ -116,17 +117,20 @@ def main():
     parser.add_argument("--aggregation", default="mean",
                         choices=["mean", "decay", "attention", "context_attention"])                # → args.aggregation
     parser.add_argument("--reduction",   default="pca", choices=["pca", "fa", "none"])             # → args.reduction
-    parser.add_argument("--wandb", action="store_true", default=False)                             # → args.wandb
+    parser.add_argument("--wandb",   action="store_true", default=False)                           # → args.wandb
+    parser.add_argument("--horizon", type=int, default=12, choices=[3, 6, 12],
+                        help="Forecast horizon — fixed across all trials (default: 12)")           # → args.horizon
     args = parser.parse_args()
 
     if args.wandb:
         _setup_wandb()
 
     root    = Path(__file__).parent.parent.parent
-    # separate output dir per target + embedding + aggregation + reduction so studies don't overwrite each other
+    # separate output dir per target + embedding + aggregation + reduction + horizon
+    # horizon is included so re-runs at a fixed horizon don't resume studies tuned for a different horizon
     emb_tag = args.embedding if args.embedding else "macro_only"
     run_tag = f"{emb_tag}_{args.aggregation}_{args.reduction}" if args.embedding else emb_tag
-    out_dir = root / "out" / "tuning" / args.target / run_tag
+    out_dir = root / "out" / "tuning" / args.target / f"{run_tag}_h{args.horizon}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     study_path = out_dir / "optuna_study.pkl"

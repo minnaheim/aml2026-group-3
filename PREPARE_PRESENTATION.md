@@ -149,31 +149,38 @@ Bringing it all together
 
 # Hyperparameter Tuning:
 
-After discussing the topic with David, he told us to fix all of the hyperparams we can think of today, and we could do the following hyperparam strategies:
+After discussing the topic with David, he told us to fix all of the hyperparams we can think of today, and use bayesian optimisation. 
 
-1. define a **bayesian optimisation** approch using `optuna`
+We want to train our **two TFT models**:
 
-2. define grid where the possible hyperparams are set, then sweep them, to hyperparam tuning.
+-> TFT without speech embeddings (serves as our ML-benchmark)
 
+-> TFT with speech embeddings
 
-Hence, these are the Hyperparams we define today:
+to predict these two categories:
+ 
+1. Targets ["CPI", "GDP", "UNRATE"]
+2. Horizons [3, 6, 12]
 
+Meaning, when it comes to hyperparameter tuning, we need to tune the following hyperparameters for these 12 model combinations, i.e.:
+
+1. TFT Macro on CPI with horizon=3 
+2. TFT with Speech Embeddings on CPI with horizon=3 
+3. TFT Macro on CPI with horizon=6
+etc. 
 
 ## Defining our Hyperparams we want to tune: 
 
-**IMPORTANT:** these hyperparams need to be re-tuned for each target. these are different approaches, and thus require different solutions -> different hyperparams.
-
-When constructing the hyperparam grid, distinguish two classes:
+<!-- When constructing the hyperparam grid, distinguish two classes:
 - **Problem-meaningful** (grid): values with a natural, interpretable range — e.g. forecast horizon (1, 3, 6, 12 months), speech window (3, 6, 12 months), lag periods.
-- **Statistical / arbitrary** (log-uniform or wide range): learning rate, hidden sizes, dropout, etc.
+- **Statistical / arbitrary** (log-uniform or wide range): learning rate, hidden sizes, dropout, etc. -->
 
 ### (A) Data & Feature Params ← *problem-meaningful grid*
+<!-- 
+- `max_prediction_length` — **forecast horizon**, e.g. {3, 6, 12} months; must match AR/ARIMA for comparability -> **FIXED BY HORIZONS** -->
+- `max_encoder_length` — context window, e.g. [12-48] months
+- `SPEECH_WINDOW_MONTHS` — rolling look-back for speech aggregation, e.g. [3-12] 
 
-- `max_prediction_length` — **forecast horizon**, e.g. {1, 6, 12} months; must match AR/ARIMA for comparability
-- `max_encoder_length` — context window, e.g. {12, 24, 36,48} months (currently 24)
-- `min_encoder_length` — lower bound on encoder, e.g. {8, 12}
-- `SPEECH_WINDOW_MONTHS` — rolling look-back for speech aggregation, e.g. {3, 6, 12} (**Anna flagged this as important!**)
-<!-- - lag periods — which lags to include, e.g. subsets of {1, 2, 6, 12} -->
 - **embedding type**:
     - FinBERT (truncated CLS / chunk-mean)
     - FOMC-RoBERTa (truncated CLS / chunk-mean)
@@ -182,7 +189,7 @@ When constructing the hyperparam grid, distinguish two classes:
      - Speech Embeddings as is (no dim reduction)
          - without linear layer
          - with linear layer
-     — PCA components per speech `N_PCA`, e.g. {5, 10, 20, 30} 
+     — PCA components per speech `N_PCA`, e.g. [5-30] 
      - Factor Analysis also `N_PCA`(just use same factor)
 - **embedding aggregator**:
     - mean 
@@ -197,7 +204,7 @@ When constructing the hyperparam grid, distinguish two classes:
 
 - `lstm_layers` — {1, 2, 4} (currently 4; was 2)
 - `hidden_size` — {16, 32, 64, 128} (currently 64; was 16)
-- `attention_head_size` — {1, 2, 4} (currently 2)
+<!-- - `attention_head_size` — {1, 2, 4} (currently 2) -->
 - `hidden_continuous_size` — {8, 16, 32} (currently 8; basic.py uses 32)
 - `dropout` — uniform in [0.05, 0.4] (currently 0.2)
 

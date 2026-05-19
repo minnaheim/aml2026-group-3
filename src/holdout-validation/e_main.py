@@ -344,6 +344,7 @@ def main():
             ckpt = tft_runner.run(
                 splits, target=target, fold=fold_idx,
                 use_wandb=args.wandb, device=args.device,
+                run_name=f"{args.run_name}-{target}-fold{fold_num}",
             )
             print(f"  → best checkpoint: {ckpt}")
 
