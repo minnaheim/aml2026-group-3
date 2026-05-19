@@ -19,7 +19,6 @@ wandb
 lightning_logs/
 __pycache__/
 *.pyc
-out/
 
 # also don't commit data files unzipped
 data/cleaned_speeches.csv
