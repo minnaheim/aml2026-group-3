@@ -29,7 +29,7 @@ from e_main               import compute_metrics, _setup_wandb
 
 # defines hyperparam grid
 def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wandb: bool = True) -> float:
-    max_prediction_length = trial.suggest_categorical("max_prediction_length", [1, 6, 12])
+    max_prediction_length = trial.suggest_categorical("max_prediction_length", [3, 6, 12])
     hparams = {
         # data / feature params
         "max_encoder_length":     trial.suggest_int("max_encoder_length", 12, 48),
