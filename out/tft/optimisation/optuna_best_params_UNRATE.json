@@ -36,5 +36,24 @@
         "aggregation": "mean",
         "horizon": 3,
         "seed": 42
+    },
+    {
+        "max_encoder_length": 12,
+        "hidden_size": 128,
+        "lstm_layers": 2,
+        "attention_head_size": 4,
+        "hidden_continuous_size": 16,
+        "dropout": 0.0728287460213146,
+        "learning_rate": 0.0009902776505551314,
+        "batch_size": 16,
+        "_best_val_loss": 0.02945665456354618,
+        "_trial_number": 196,
+        "_n_trials": 200,
+        "_total_minutes": 98.9,
+        "_minutes_per_trial": 0.5,
+        "embedding": null,
+        "aggregation": "mean",
+        "horizon": 6,
+        "seed": 42
     }
 ]
