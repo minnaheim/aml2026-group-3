@@ -19,7 +19,16 @@ wandb
 lightning_logs/
 __pycache__/
 *.pyc
-out/
+out/*
+!out/tft/
+out/tft/*
+!out/tft/optimisation/
+out/tft/optimisation/*
+!out/tft/optimisation/*.csv
+!out/tft/optimisation/*.json
+!out/tft/optimisation/plots/
+out/tft/optimisation/plots/*
+!out/tft/optimisation/plots/*.html
 
 # also don't commit data files unzipped
 data/cleaned_speeches.csv

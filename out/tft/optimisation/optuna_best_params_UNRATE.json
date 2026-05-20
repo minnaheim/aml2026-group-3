@@ -1,0 +1,40 @@
+[
+    {
+        "max_encoder_length": 24,
+        "hidden_size": 128,
+        "lstm_layers": 2,
+        "attention_head_size": 1,
+        "hidden_continuous_size": 32,
+        "dropout": 0.23366475107128326,
+        "learning_rate": 0.0019762189340280074,
+        "batch_size": 32,
+        "_best_val_loss": 0.04182405397295952,
+        "_trial_number": 0,
+        "_n_trials": 2,
+        "_total_minutes": 2.5,
+        "_minutes_per_trial": 1.2,
+        "embedding": null,
+        "aggregation": "mean",
+        "horizon": 3,
+        "seed": 42
+    },
+    {
+        "max_encoder_length": 24,
+        "hidden_size": 128,
+        "lstm_layers": 1,
+        "attention_head_size": 2,
+        "hidden_continuous_size": 32,
+        "dropout": 0.11282762099326776,
+        "learning_rate": 0.001514840229652477,
+        "batch_size": 16,
+        "_best_val_loss": 0.031107336282730103,
+        "_trial_number": 23,
+        "_n_trials": 30,
+        "_total_minutes": 21.4,
+        "_minutes_per_trial": 0.7,
+        "embedding": null,
+        "aggregation": "mean",
+        "horizon": 3,
+        "seed": 42
+    }
+]
