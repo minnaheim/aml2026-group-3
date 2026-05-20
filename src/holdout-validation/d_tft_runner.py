@@ -155,8 +155,10 @@ class TFTRunner:
         if self.hparams["normalizer"] == "group":
             from pytorch_forecasting.data import GroupNormalizer
             normalizer = GroupNormalizer(groups=["series_id"])
+        elif self.hparams["normalizer"] == "encoder_softplus":
+            normalizer = EncoderNormalizer(transformation="softplus")
         else:
-            normalizer = EncoderNormalizer(transformation=None)  # cannot use softplus since log-diff can be negative
+            normalizer = EncoderNormalizer(transformation=None) 
 
         training = TimeSeriesDataSet(
             data=fit_df,

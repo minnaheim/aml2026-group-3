@@ -98,13 +98,13 @@ Best params are saved to `out/tuning/{target}/{run_tag}/best_params.json`. The s
 
 ### Macro-only (no embeddings) — ~4.5 h total
 ```bash
-python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 50 --horizon 12 --device cuda --wandb
-python src/holdout-validation/g_tune_hyperparams.py --target GDP --n-trials 50 --horizon 12 --device cuda --wandb
-python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --horizon 12 --device cuda --wandb
+python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 40 --horizon 3 --device cuda --wandb
+python src/holdout-validation/g_tune_hyperparams.py --target GDP --n-trials 40 --horizon 3 --device cuda --wandb
+python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 40 --horizon 3 --device cuda --wandb
 # fomc-roberta + mean aggregation
 python src/holdout-validation/g_tune_hyperparams.py --target CPI   --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda --wandb
-python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda --wandb # continue here 
-python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda --wandb # continue here
+python src/holdout-validation/g_tune_hyperparams.py --target UNRATE --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda --wandb
+python src/holdout-validation/g_tune_hyperparams.py --target GDP    --n-trials 50 --embedding fomc-roberta --aggregation mean --reduction pca --device cuda --wandb 
 ```
 
 
