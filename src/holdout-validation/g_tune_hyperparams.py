@@ -48,7 +48,7 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wan
         # optimisation
         "learning_rate":          trial.suggest_float("learning_rate", 1e-4, 0.15, log=True),
         # normalizer
-        "normalizer":             trial.suggest_categorical("normalizer", ["encoder_none", "group"]),
+        "normalizer":             trial.suggest_categorical("normalizer", ["encoder_none", "group", "encoder_softplus"]),
         # fixed
         "min_encoder_length":     8,
         "attention_head_size":    2,
