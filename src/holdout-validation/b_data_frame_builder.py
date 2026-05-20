@@ -6,9 +6,6 @@ from pathlib import Path
 # get attention weights layer
 from a_speech_attention import SpeechAttentionAggregator, train_attention_aggregator, aggregate_with_attention
 
-# how many quarters to look back 
-# when aggregating speeches into a single feature vector per quarter
-SPEECH_WINDOW_MONTHS = 12
 
 # speech weighting
 DECAY_LAMBDA = 0.01  # higher = faster decay (more recent speeches dominate)
@@ -32,11 +29,12 @@ class DataFrameBuilder:
         "Federal Reserve Bank of Dallas": "DAL", "Federal Reserve Bank of San Francisco": "SF"
     }  
 
-  def __init__(self, path: str | None = None, aggregation = 'mean'):
+  def __init__(self, path: str | None = None, aggregation = 'mean', speech_window: int = 12):
     if path is None:
       self.path = os.getcwd()
     else:
        self.path = path
+    self.speech_window = speech_window
     self.N_FOLDS = 3 # holdout cv
     self.FINAL_HOLDOUT = 12 # 12 months = 1 year
     # data without holdout
@@ -215,12 +213,12 @@ class DataFrameBuilder:
       - 'decay':     exponential decay by recency, w = exp(-lambda * days_before)
       - 'attention': learned weights (TODO)
       
-      Window: [quarter_start - SPEECH_WINDOW_MONTHS, quarter_start).
+      Window: [quarter_start - self.speech_window, quarter_start).
       Falls back to any speech before quarter_start if the window is empty.
       """
       
       assert self.speeches_df is not None
-      window_start = quarter_start - pd.DateOffset(months=SPEECH_WINDOW_MONTHS)
+      window_start = quarter_start - pd.DateOffset(months=self.speech_window)
       mask = (
           (self.speeches_df["Date"] >= window_start)
           & (self.speeches_df["Date"] < quarter_start)
@@ -272,7 +270,7 @@ class DataFrameBuilder:
           elif self.aggregation == "context_attention":
               assert self.context_attention_model is not None
               assert macro_state is not None, "macro_state required for context_attention"
-              from speech_attention import aggregate_with_context_attention
+              from a_speech_attention import aggregate_with_context_attention
               weighted_mean_vec, attn_weights = aggregate_with_context_attention(
                   self.context_attention_model, sub, self.pca_cols, macro_state
               )
@@ -346,7 +344,7 @@ class DataFrameBuilder:
 
   def _aggregate_dissent_for_month(self, month_start: pd.Timestamp) -> dict:
     assert self.dissent_df is not None
-    window_start = month_start - pd.DateOffset(months=SPEECH_WINDOW_MONTHS)
+    window_start = month_start - pd.DateOffset(months=self.speech_window)
     mask = (
         (self.dissent_df["date"] >= window_start)
         & (self.dissent_df["date"] < month_start)
@@ -510,7 +508,7 @@ class DataFrameBuilder:
             if self.aggregation == "context_attention":
                 train_end = s["train"]["date"].max()
                 train_macro = s["train"].copy()  # has the macro state
-                from speech_attention import train_context_aware_attention
+                from a_speech_attention import train_context_aware_attention
                 self.context_attention_model = train_context_aware_attention(
                     speeches_df, train_macro, raw_pca_cols,
                     self.macro_cols_for_attention, train_end

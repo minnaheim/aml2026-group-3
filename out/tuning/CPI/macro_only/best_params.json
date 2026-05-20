@@ -1,0 +1,16 @@
+{
+  "max_prediction_length": 12,
+  "max_encoder_length": 46,
+  "speech_window_months": 10,
+  "n_pca": 28,
+  "hidden_size": 16,
+  "hidden_continuous_size": 32,
+  "lstm_layers": 4,
+  "dropout": 0.3377053476858167,
+  "learning_rate": 0.018038324312252732,
+  "normalizer": "encoder_none",
+  "_best_mae": 0.00184,
+  "_n_trials": 50,
+  "_total_minutes": 73.5,
+  "_minutes_per_trial": 1.5
+}

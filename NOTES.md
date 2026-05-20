@@ -41,7 +41,7 @@
 - [ ] **Quantile Loss/q-Risk**
 - [ ] **rRMSE**, so relative RMSE error from including vs. not including speeches in TFT (can calculate from what we have)
 - [ ] **variable selection**: we already have the interpret_output function but we aren't saving output yet => Save!!
-
+- [ ] remove MAPE !!
 
 ### CV PIPELINE
 - [x] Get up and running!!
@@ -49,6 +49,19 @@
 ### ABLATION
 - [ ] Perform proper study
   - [ ] Include **different horizons** systematically: pipeline accomodates this, ablation code not yet
+
+### FINAL Model
+- [ ] apply best hyperparams
+- [ ] use it on holdout 
+
+### Hyperparam tuning 
+- [ ] inspect pkl files (via notebook)
+- [ ] change hyperparam tuning -> per target, per horizon!!
+- [ ] use only context-attention, not attention only !!
+- [ ] horizons: [3,6,12]
+
+### Presentation
+- [ ] add figures (i.e. ablation studies, hyperparam tables)
 
 ## Decisions
 ### Data Sources

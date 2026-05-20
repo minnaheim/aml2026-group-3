@@ -52,9 +52,33 @@ def compute_metrics(df: pd.DataFrame) -> dict:
     errors = df["actual"].values - df["predicted"].values
     mae  = float(np.mean(np.abs(errors)))
     rmse = float(np.sqrt(np.mean(errors ** 2)))
-    mask = df["actual"].values != 0
-    mape = float(np.mean(np.abs(errors[mask] / df["actual"].values[mask])) * 100)
-    return {"MAE": round(mae, 5), "RMSE": round(rmse, 5), "MAPE": round(mape, 5)}
+
+    # Relative RMSE (divide RMSE by std of actuals)
+    std_actual = np.std(df["actual"].values)
+    rel_rmse = float(rmse / std_actual) if std_actual > 0 else np.nan
+
+    # Quantile loss (if quantiles available)
+    quantile_loss = np.nan
+    if "pred_lo" in df.columns and "pred_hi" in df.columns:
+        # Use 0.1 and 0.9 quantiles if present, else fallback to 0.05/0.95
+        q_lo = "pred_lo"
+        q_hi = "pred_hi"
+
+        # Compute pinball loss for both quantiles and average
+        def pinball_loss(y, y_hat, q):
+            delta = y - y_hat
+            return np.mean(np.maximum(q * delta, (q - 1) * delta))
+        y = df["actual"].values
+        ql_10 = pinball_loss(y, df[q_lo].values, 0.1)
+        ql_90 = pinball_loss(y, df[q_hi].values, 0.9)
+        quantile_loss = float((ql_10 + ql_90) / 2)
+
+    return {
+        "MAE": round(mae, 5),
+        "RMSE": round(rmse, 5),
+        "rel_RMSE": round(rel_rmse, 5),
+        "QuantileLoss": round(quantile_loss, 5) if not np.isnan(quantile_loss) else np.nan,
+    }
 
 
 # ── save ─────────────────────────────────────────────────────────────────────
@@ -74,12 +98,12 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
                 m = compute_metrics(df)
                 rows.append({"model": model, "fold": fold, "target": target, **m})
 
-    metrics_df = pd.DataFrame(rows)[["model", "fold", "target", "MAE", "RMSE", "MAPE"]]
+    metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE", "RMSE", "rel_RMSE", "QuantileLoss"] if c in pd.DataFrame(rows).columns]]
     metrics_df = metrics_df.sort_values(by=["target", "model", "fold"]).reset_index(drop=True)
     metrics_df.to_csv(run_dir  / "metrics_per_fold.csv", index=False)
 
     avg_df = (
-        metrics_df.groupby(["model", "target"])[["MAE", "RMSE", "MAPE"]]
+        metrics_df.groupby(["model", "target"])[[c for c in ["MAE", "RMSE", "rel_RMSE", "QuantileLoss"] if c in metrics_df.columns]]
         .mean().round(5).reset_index()
         .sort_values(by=["target", "model"]).reset_index(drop=True)
     )
@@ -126,11 +150,16 @@ def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
                         color="black", linewidth=1.5, label="Actual")
                 actual_drawn = True
 
-            ax.plot(df["date"], df["predicted"],
+                ax.plot(df["date"], df["predicted"],
                     color=colors.get(model, "orange"),
                     linewidth=1.5,
                     linestyle=linestyles.get(model, "-"),
                     label=f"{model} Predicted")
+
+                # Add prediction interval fill for TFT quantiles if available
+                if model == "TFT" and "pred_lo" in df.columns and "pred_hi" in df.columns:
+                    ax.fill_between(df["date"], df["pred_lo"], df["pred_hi"],
+                        color=colors["TFT"], alpha=0.15, label="TFT 10–90% PI")
 
         ax.set_title(f"{target}: Predicted vs Actual")
         ax.set_xlabel("Date")
@@ -185,7 +214,7 @@ def main():
     )
     
     parser.add_argument(
-        "--horizon", type=int, default=12, choices=[1, 6, 9, 12],
+        "--horizon", type=int, default=12, choices=[1, 6, 12],
         help="Forecast horizon in months (default: 12)",
     )
     
@@ -203,6 +232,19 @@ def main():
     parser.add_argument(
         "--run-name", default="default",
         help="Unique name for this run (used for output subfolder)",
+    )
+
+    # ── TFT hyperparams (override defaults from HPARAMS_DEFAULTS) ────────────
+    parser.add_argument("--encoder-length",         type=int,   default=24,   help="max_encoder_length (default 24)")
+    parser.add_argument("--speech-window",          type=int,   default=12,   help="SPEECH_WINDOW_MONTHS (default 12)")
+    parser.add_argument("--lstm-layers",            type=int,   default=4,    help="TFT lstm_layers (default 4)")
+    parser.add_argument("--hidden-size",            type=int,   default=64,   help="TFT hidden_size (default 64)")
+    parser.add_argument("--hidden-continuous-size", type=int,   default=8,    help="TFT hidden_continuous_size (default 8)")
+    parser.add_argument("--dropout",                type=float, default=0.2,  help="TFT dropout (default 0.2)")
+    parser.add_argument("--lr",                     type=float, default=0.03, help="learning rate (default 0.03)")
+    parser.add_argument(
+        "--normalizer", default="encoder_none", choices=["encoder_none", "group"],
+        help="Target normalizer: encoder_none = EncoderNormalizer(None), group = GroupNormalizer (default: encoder_none)",
     )
     
     args = parser.parse_args()
@@ -227,7 +269,19 @@ def main():
     # ── 1. split the data acc. to data-frame-builder ─────────────────────────
     # dissents are loaded explicitly so those features appear in process_data()
     # regardless of whether embeddings are used
-    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation)
+    hparams = {
+        "max_prediction_length":  args.horizon,
+        "max_encoder_length":     args.encoder_length,
+        "speech_window_months":   args.speech_window,
+        "lstm_layers":            args.lstm_layers,
+        "hidden_size":            args.hidden_size,
+        "hidden_continuous_size": args.hidden_continuous_size,
+        "dropout":                args.dropout,
+        "learning_rate":          args.lr,
+        "normalizer":             args.normalizer,
+    }
+
+    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window)
     dfb.load_fomc_dissent()
     df  = dfb.process_data()
     splits, holdout = dfb.generate_split(df)
@@ -255,9 +309,9 @@ def main():
         f"({len(holdout)} rows)\n"
     )
     # initiate runners
-    ar_runner    = ARRunner(dfb)
-    arima_runner = ARIMARunner(dfb)
-    tft_runner   = TFTRunner(dfb)
+    ar_runner    = ARRunner(dfb,    max_prediction_length=hparams["max_prediction_length"])
+    arima_runner = ARIMARunner(dfb, max_prediction_length=hparams["max_prediction_length"])
+    tft_runner   = TFTRunner(dfb,   hparams=hparams)
 
     # results[model][fold_num][target] = predictions DataFrame
     results = {"TFT": {s["fold"]: {} for s in splits}}
@@ -276,13 +330,13 @@ def main():
             if not args.no_baselines:
                 print("\n[AR]")
                 ar_order, ar_seasonal = ar_runner.run(splits, target=target, fold=fold_idx)
-                ar_df = ar_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
+                ar_df = ar_runner.predict(splits, target=target, fold=fold_idx)
                 results["AR"][fold_num][target] = ar_df
                 print(f"  → {len(ar_df)} predictions (order={ar_order}, seasonal={ar_seasonal})")
 
                 print("\n[ARIMA]")
                 arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=fold_idx)
-                arima_df = arima_runner.predict(splits, target=target, fold=fold_idx, step=args.horizon)
+                arima_df = arima_runner.predict(splits, target=target, fold=fold_idx)
                 results["ARIMA"][fold_num][target] = arima_df
                 print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
@@ -290,6 +344,7 @@ def main():
             ckpt = tft_runner.run(
                 splits, target=target, fold=fold_idx,
                 use_wandb=args.wandb, device=args.device,
+                run_name=f"{args.run_name}-{target}-fold{fold_num}",
             )
             print(f"  → best checkpoint: {ckpt}")
 
@@ -300,7 +355,6 @@ def main():
             print("\n[TFT – inference]")
             tft_df = tft_runner.predict(
                 ckpt, splits, target=target, fold=fold_idx, device=args.device,
-                step=args.horizon, # includes horizon
             )
             results["TFT"][fold_num][target] = tft_df
             print(f"  → {len(tft_df)} predictions")
