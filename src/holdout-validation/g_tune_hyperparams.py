@@ -41,12 +41,12 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wan
         "max_encoder_length":     trial.suggest_int("max_encoder_length", 12, 48),
         "max_prediction_length":  args.horizon,   # fixed — horizon is a research variable, not a tuning param
         # architecture
-        "hidden_size":            trial.suggest_categorical("hidden_size", [16, 32, 64, 128, 256]),
-        "hidden_continuous_size": trial.suggest_categorical("hidden_continuous_size", [2, 4, 8, 16, 32]),
-        "lstm_layers":            trial.suggest_categorical("lstm_layers", [1, 2, 4, 8, 16]),
-        "dropout":                trial.suggest_float("dropout", 0.05, 0.4),
+        "hidden_size":            trial.suggest_categorical("hidden_size", [8, 16, 32, 64, 128, 256]),
+        "hidden_continuous_size": trial.suggest_categorical("hidden_continuous_size", [2, 4, 8, 16]),
+        "lstm_layers":            trial.suggest_categorical("lstm_layers", [4, 8, 16, 32]),
+        "dropout":                trial.suggest_float("dropout", 0.05, 0.55),
         # optimisation
-        "learning_rate":          trial.suggest_float("learning_rate", 1e-4, 0.1, log=True),
+        "learning_rate":          trial.suggest_float("learning_rate", 1e-4, 0.15, log=True),
         # normalizer
         "normalizer":             trial.suggest_categorical("normalizer", ["encoder_none", "group"]),
         # fixed
