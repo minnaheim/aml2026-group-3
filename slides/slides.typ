@@ -20,6 +20,8 @@
   ]
 ]
 
+#show: content-slides
+
 #slide[
   = Motivation
   - Macro forecasts matter for 
@@ -225,14 +227,24 @@ ADJUST HERE
 ]
 
 
- #slide[
-   #v(1fr)
-   #set text(size: 1.5em)
-   #align(center)[
-     = Appendix
-   ]
-   #v(1fr)
- ]
+// save the last main slide number
+#let main-slides = toolbox.last-slide-number
+
+#set page(footer: context [
+  #place(bottom + right)[
+    #pad(bottom: 1.5em)[
+      #text(size: 0.8em)[
+        *#toolbox.slide-number* / #main-slides #text(fill: gray)[ | Appendix]
+      ]
+    ]
+  ]
+])
+
+#slide[
+  #v(1fr)
+  #align(center)[= Appendix]
+  #v(1fr)
+]
 
  
  #slide[
