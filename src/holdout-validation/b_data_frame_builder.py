@@ -505,7 +505,8 @@ class DataFrameBuilder:
             if self.aggregation == "attention":
                 train_end = s["train"]["date"].max()
                 self.attention_model = train_attention_aggregator(
-                    speeches_df, raw_pca_cols, train_end
+                    speeches_df, raw_pca_cols, train_end,
+                    device = self.device
                 )
                 
             if self.aggregation == "context_attention":
