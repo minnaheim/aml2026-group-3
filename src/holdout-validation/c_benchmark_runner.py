@@ -133,7 +133,10 @@ class ARRunner:
             # expanding context mirrors TFT: same fixed params (from run()), but encoder sees more predicted data
             # .apply() keeps the fitted params from run(), no refit
             ctx_result   = self._fit.apply(context_series.asfreq(freq))
-            forecast = ctx_result.get_forecast(steps=window_size).predicted_mean.values
+            fc_obj       = ctx_result.get_forecast(steps=window_size)
+            forecast     = fc_obj.predicted_mean.values
+            # 80% CI = 10th–90th quantile, matching e_main.py pinball loss at q=0.1/0.9
+            ci           = fc_obj.conf_int(alpha=0.2).values
 
             # append own predictions (not actuals) to context for next window
             pred_rows    = pd.DataFrame({"date": test_window["date"].values, target: forecast})
@@ -143,6 +146,8 @@ class ARRunner:
                 "date":      test_window["date"].values,
                 "actual":    test_window[target].values.astype(float),
                 "predicted": forecast.astype(float),
+                "pred_lo":   ci[:, 0].astype(float),
+                "pred_hi":   ci[:, 1].astype(float),
                 "target":    target,
             }))
 
@@ -278,7 +283,10 @@ class ARIMARunner:
             # expanding context mirrors TFT: same fixed params (from run()), but model sees more predicted data
             # .apply() keeps the fitted params from run(), no refit
             ctx_result   = self._fit.apply(context_series.asfreq(freq))
-            forecast = ctx_result.get_forecast(steps=window_size).predicted_mean.values
+            fc_obj       = ctx_result.get_forecast(steps=window_size)
+            forecast     = fc_obj.predicted_mean.values
+            # 80% CI = 10th–90th quantile, matching e_main.py pinball loss at q=0.1/0.9
+            ci           = fc_obj.conf_int(alpha=0.2).values
 
             # append own predictions (not actuals) to context for next window
             pred_rows    = pd.DataFrame({"date": test_window["date"].values, target: forecast})
@@ -288,6 +296,8 @@ class ARIMARunner:
                 "date":      test_window["date"].values,
                 "actual":    test_window[target].values.astype(float),
                 "predicted": forecast.astype(float),
+                "pred_lo":   ci[:, 0].astype(float),
+                "pred_hi":   ci[:, 1].astype(float),
                 "target":    target,
             }))
 

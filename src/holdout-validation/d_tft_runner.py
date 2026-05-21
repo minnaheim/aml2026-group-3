@@ -9,7 +9,7 @@ import lightning.pytorch as pl
 import matplotlib as plt
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import EncoderNormalizer # switched from group normalizer
-from pytorch_forecasting.metrics import SMAPE, QuantileLoss
+from pytorch_forecasting.metrics import QuantileLoss
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 warnings.filterwarnings("ignore")

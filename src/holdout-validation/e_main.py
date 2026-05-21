@@ -3,9 +3,9 @@
 Holdout validation pipeline: AR(1) benchmark vs TFT.
 
 Usage:
-    python main.py
-    python main.py --targets CPI GDP --device mps --wandb
-    python main.py --targets UNRATE --device cuda
+    python src/holdout-validation/e_main.py
+    python src/holdout-validation/e_main.py --targets CPI GDP --device mps --wandb
+    python src/holdout-validation/e_main.py --targets UNRATE --device cuda
 """
 import argparse
 import sys
