@@ -20,12 +20,22 @@
 ]
 
 #slide[
-  = Problem Setting & Motivation
-    - Macro Forecasting hard
-    - Forward Guidance / Superior Info
-    - Deep Learning Context
+  = Motivation
+  - Macro forecasts matter for governments, financial markets, and *central banks*
+  - The Federal Reserve (Fed) has a *dual mandate*: price stability + maximum employment
+  - Accurate forecasts of inflation, unemployment, and GDP are crucial for interest rate decisions
+  #pause
+  $=>$ Can we do better than standard macro models?
 ]
 
+#slide[
+  = Research Question
+  - The Fed may communicate *additional information* useful for forecasting:
+      + *Superior information*: private data and internal models not available to the public
+      + *Forward guidance*: signals about future policy to guide market expectations
+  #pause
+  $=>$ *Do Fed speeches contain information useful to forecast macroeconomic indicators?*
+]
 
 // #slide[
 //   = Our Approach
