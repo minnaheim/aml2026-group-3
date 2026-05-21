@@ -29,7 +29,7 @@ class DataFrameBuilder:
         "Federal Reserve Bank of Dallas": "DAL", "Federal Reserve Bank of San Francisco": "SF"
     }  
 
-  def __init__(self, path: str | None = None, aggregation = 'mean', speech_window: int = 12):
+  def __init__(self, path: str | None = None, aggregation = 'mean', speech_window: int = 12, device='cpu'):
     if path is None:
       self.path = os.getcwd()
     else:
@@ -61,6 +61,9 @@ class DataFrameBuilder:
     # this particularly speaks to the supply- vs. demand-driven inflation story
     self.context_attention_model = None
     self.macro_cols_for_attention = ["CPI", "UNRATE", "GDP", "FFR_mean", "GBP_mean"]
+    
+    # get device
+    self.device = device
 
   # helper to clean initial macro df, same across all frequencies
   def _read_rename_date(self, freq_path):
@@ -259,7 +262,8 @@ class DataFrameBuilder:
           elif self.aggregation == "attention":
               assert self.attention_model is not None, "Call _fit_attention() before aggregating."
               weighted_mean_vec, attn_weights = aggregate_with_attention(
-                  self.attention_model, sub, self.pca_cols
+                  self.attention_model, sub, self.pca_cols,
+                  device = self.device
               )
               
               for col, val in zip(self.pca_cols, weighted_mean_vec):
@@ -272,7 +276,8 @@ class DataFrameBuilder:
               assert macro_state is not None, "macro_state required for context_attention"
               from a_speech_attention import aggregate_with_context_attention
               weighted_mean_vec, attn_weights = aggregate_with_context_attention(
-                  self.context_attention_model, sub, self.pca_cols, macro_state
+                  self.context_attention_model, sub, self.pca_cols, macro_state,
+                  device = self.device
               )
               for col, val in zip(self.pca_cols, weighted_mean_vec):
                   res[f"{col}_mean"] = float(val)
@@ -380,7 +385,7 @@ class DataFrameBuilder:
     # ------ get daily data ---------
     daily_path = self.path + '/data/macro-vars-daily.csv'
     df_daily = self._read_rename_date(daily_path)
-    df_daily = df_daily.drop(columns=["SOFR", "T10Y2Y", "EUR"]) # remove shorter vars: SOFR, T10Y2Y, EUR
+    df_daily = df_daily.drop(columns=["SOFR", "EUR"]) # remove shorter vars: SOFR, EUR
     # NaNs on weekends/holidays are skipped by .agg(mean/std) — no pre-fill needed
 
     # ------- get quarterly data --------
@@ -502,7 +507,8 @@ class DataFrameBuilder:
             if self.aggregation == "attention":
                 train_end = s["train"]["date"].max()
                 self.attention_model = train_attention_aggregator(
-                    speeches_df, raw_pca_cols, train_end
+                    speeches_df, raw_pca_cols, train_end,
+                    device = self.device
                 )
                 
             if self.aggregation == "context_attention":
@@ -511,7 +517,8 @@ class DataFrameBuilder:
                 from a_speech_attention import train_context_aware_attention
                 self.context_attention_model = train_context_aware_attention(
                     speeches_df, train_macro, raw_pca_cols,
-                    self.macro_cols_for_attention, train_end
+                    self.macro_cols_for_attention, train_end,
+                    device=self.device
                 )
 
             # _add_speech_features overwrites self.pca_cols with aggregated names

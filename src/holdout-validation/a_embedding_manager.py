@@ -20,6 +20,7 @@ import pandas as pd
 from pathlib import Path
 from sklearn.decomposition import PCA, FactorAnalysis # added factor analysis here
 # FA basically looks for latent factors, so something like 'hawkish' vs. 'dovish' speeches etc.
+from sklearn.preprocessing import StandardScaler
 
 N_PCA        = 5
 RANDOM_STATE = 42
@@ -132,8 +133,17 @@ class EmbeddingManager:
         cutoff = split["train_end"]
     
         available_meta = [c for c in _META_COLS if c in self.full_df.columns]
+        
         X_all = self.full_df[self.emb_cols].values.astype(np.float32)
         train_mask = self.full_df["Date"] <= cutoff
+        
+        # initialize scaler for the normalization
+        scaler = StandardScaler()
+        
+        # fit ONLY on training data, then transform the entire dataset
+        # no data leakage!
+        scaler.fit(X_all[train_mask]) # fit step
+        X_all_scaled = scaler.transform(X_all) # transform step
 
         if self.reduction == "pca":
             """
@@ -154,8 +164,9 @@ class EmbeddingManager:
             one row per speech.
             """
             pca = PCA(n_components=self.n_pca, random_state=RANDOM_STATE)
-            pca.fit(X_all[train_mask])
-            reduced = pca.transform(X_all)
+            # use scaled version
+            pca.fit(X_all_scaled[train_mask])
+            reduced = pca.transform(X_all_scaled)
             cumvar = np.cumsum(pca.explained_variance_ratio_)
             print(
                 f"[EmbeddingManager] PCA fold {fold}: {self.n_pca} components → "
@@ -172,7 +183,8 @@ class EmbeddingManager:
                 f"This will be very slow on CPU and may overfit badly. "
                 f"Run with --device cuda for reasonable speed."
             )
-            reduced = X_all
+            # again, use scaled version
+            reduced = X_all_scaled
             out_cols = [f"pca_{i}" for i in range(len(self.emb_cols))]
             print(
                 f"[EmbeddingManager] No reduction fold {fold}: "
@@ -184,8 +196,8 @@ class EmbeddingManager:
             # keep the n_pca and pca_column names so that it works nicely in the rest of the code
             # also, adjusting n_pca in hyperparameter tuning also works here!
             fa = FactorAnalysis(n_components=self.n_pca, random_state=RANDOM_STATE)
-            fa.fit(X_all[train_mask])  # fit on training speeches only — no leakage
-            reduced = fa.transform(X_all)
+            fa.fit(X_all_scaled[train_mask])  # fit on training speeches only — no leakage; also, use scaled version!
+            reduced = fa.transform(X_all_scaled)
             print(
                 f"[EmbeddingManager] Factor Analysis fold {fold}: {self.n_pca} factors "
                 f"(fitted on {int(train_mask.sum())}/{len(self.full_df)} speeches)"
@@ -193,7 +205,7 @@ class EmbeddingManager:
             out_cols = [f"pca_{i}" for i in range(self.n_pca)]    
         
         else:
-            raise ValueError(f"Unknown reduction: {self.reduction}. Choose from 'pca', 'none'")
+            raise ValueError(f"Unknown reduction: {self.reduction}. Choose from 'pca', 'none', 'fa'")
 
         out = self.full_df[available_meta].copy().reset_index(drop=True)
         out[out_cols] = reduced
