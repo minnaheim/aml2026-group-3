@@ -385,7 +385,7 @@ class DataFrameBuilder:
     # ------ get daily data ---------
     daily_path = self.path + '/data/macro-vars-daily.csv'
     df_daily = self._read_rename_date(daily_path)
-    df_daily = df_daily.drop(columns=["SOFR", "T10Y2Y", "EUR"]) # remove shorter vars: SOFR, T10Y2Y, EUR
+    df_daily = df_daily.drop(columns=["SOFR", "EUR"]) # remove shorter vars: SOFR, EUR
     # NaNs on weekends/holidays are skipped by .agg(mean/std) — no pre-fill needed
 
     # ------- get quarterly data --------
