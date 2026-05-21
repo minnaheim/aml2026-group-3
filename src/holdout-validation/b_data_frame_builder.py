@@ -262,7 +262,8 @@ class DataFrameBuilder:
           elif self.aggregation == "attention":
               assert self.attention_model is not None, "Call _fit_attention() before aggregating."
               weighted_mean_vec, attn_weights = aggregate_with_attention(
-                  self.attention_model, sub, self.pca_cols
+                  self.attention_model, sub, self.pca_cols,
+                  device = self.device
               )
               
               for col, val in zip(self.pca_cols, weighted_mean_vec):
@@ -275,7 +276,8 @@ class DataFrameBuilder:
               assert macro_state is not None, "macro_state required for context_attention"
               from a_speech_attention import aggregate_with_context_attention
               weighted_mean_vec, attn_weights = aggregate_with_context_attention(
-                  self.context_attention_model, sub, self.pca_cols, macro_state
+                  self.context_attention_model, sub, self.pca_cols, macro_state,
+                  device = self.device
               )
               for col, val in zip(self.pca_cols, weighted_mean_vec):
                   res[f"{col}_mean"] = float(val)
