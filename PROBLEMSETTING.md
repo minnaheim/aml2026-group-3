@@ -87,9 +87,7 @@ Ideas for Variable Setting for TFT:
   - Mean RMSE (over all folds)
   - Mean Average Error
 - Use of Vintages of Macro Variables^[We assume Fed Speeches are unrevised]
-- Horizon
-  - for *Monthly* Variables (CPI, unemployment rate, exchange rates): 1,6,12
-  - for *Quarterly* Variables (GDP): 1,4
+- Horizon: 3,6,12 months
 
 ## Evaluation Metrics
 To assess the predictive power of the extracted signal $\hat{\sigma}(s_{kt})$, we evaluate our forecasts $\hat{x}_{t+h}$ against a pseudo-out-of-sample (POOS) test set. We employ RMSE and MAE as primary loss functions.
@@ -123,7 +121,12 @@ Mechanism: For each prediction and forecast horizon, TFT produces sample-specifi
 Project application: We will aggregate these weights across the pseudo-out-of-sample test set (e.g., by median and interquartile range) and compare the relevance of speech embeddings with that of core macro predictors (e.g., lagged CPI and unemployment). This provides an interpretable measure of relative contribution, while not being interpreted as a causal effect.
 
 ## Hyperparameter Tuning
-- As seen in the [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363) paper, where the hyperparameter optimisation is conducted via random search, we will do so too.
+- We will do our Hyperparameter Tuning based on 2 Steps:
+
+1. Step: Non-Context Relevant Hyperparams, which we tune first, and then fix,
+    - such as: `learning_rate` `hidden_size` etc. 
+2. Step: Tune the Economics Relevant Hyperparams, fixing the params from Step 1
+    - such as: N_PCA of speech embeddings, speech aggregation types, etc.
 
 ## Machine Learning Benchmark
 1. **ARIMA (macro-only benchmark)**: Box-Jenkins ARIMA models use autoregressive lags, differencing, and moving-average terms to model persistent macroeconomic dynamics.
