@@ -29,7 +29,7 @@ class DataFrameBuilder:
         "Federal Reserve Bank of Dallas": "DAL", "Federal Reserve Bank of San Francisco": "SF"
     }  
 
-  def __init__(self, path: str | None = None, aggregation = 'mean', speech_window: int = 12):
+  def __init__(self, path: str | None = None, aggregation = 'mean', speech_window: int = 12, device='cpu'):
     if path is None:
       self.path = os.getcwd()
     else:
@@ -61,6 +61,9 @@ class DataFrameBuilder:
     # this particularly speaks to the supply- vs. demand-driven inflation story
     self.context_attention_model = None
     self.macro_cols_for_attention = ["CPI", "UNRATE", "GDP", "FFR_mean", "GBP_mean"]
+    
+    # get device
+    self.device = device
 
   # helper to clean initial macro df, same across all frequencies
   def _read_rename_date(self, freq_path):
@@ -511,7 +514,8 @@ class DataFrameBuilder:
                 from a_speech_attention import train_context_aware_attention
                 self.context_attention_model = train_context_aware_attention(
                     speeches_df, train_macro, raw_pca_cols,
-                    self.macro_cols_for_attention, train_end
+                    self.macro_cols_for_attention, train_end,
+                    device=self.device
                 )
 
             # _add_speech_features overwrites self.pca_cols with aggregated names
