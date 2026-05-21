@@ -171,48 +171,42 @@ etc.
 
 ## Defining our Hyperparams we want to tune: 
 
-<!-- When constructing the hyperparam grid, distinguish two classes:
-- **Problem-meaningful** (grid): values with a natural, interpretable range — e.g. forecast horizon (1, 3, 6, 12 months), speech window (3, 6, 12 months), lag periods.
-- **Statistical / arbitrary** (log-uniform or wide range): learning rate, hidden sizes, dropout, etc. -->
+We defined out hyperparameter tuning strategy to work in two steps:
 
-### (A) Data & Feature Params ← *problem-meaningful grid*
-<!-- 
-- `max_prediction_length` — **forecast horizon**, e.g. {3, 6, 12} months; must match AR/ARIMA for comparability -> **FIXED BY HORIZONS** -->
+1. First, we tune all of the non-context relevant paramters, then fix those
+2. Second, train the econ-specific context-parameters (embedding params)
+
+
+### First Part of HP Tuning:
+
 - `max_encoder_length` — context window, e.g. [12-48] months
-- `SPEECH_WINDOW_MONTHS` — rolling look-back for speech aggregation, e.g. [3-12] 
+- `lstm_layers` — {1, 2, 4} (currently 4; was 2)
+- `hidden_size` — {16, 32, 64, 128, 256} 
+- `hidden_continuous_size` — {2, 4, 8, 16}
+- `dropout` — between [0.05, 0.55] 
+- `learning_rate` — between [1e-4, 0.1]
+- `batch_size` — {16, 32, 64, 128} (currently 128 val, 16 train)
+- `max_epochs` — fixed at 50 (tuned via early stopping, not a sweep param)
+- **normalizer** (per target, since series differ in scale/stationarity):
+    - `EncoderNormalizer(transformation="None")`  — no transform (after getting new macro data)  
+    - `GroupNormalizer` — global scaling across the group; tested before, currently dropped
 
+### Second Part of HP Tuning 
+
+- `SPEECH_WINDOW_MONTHS` — rolling look-back for speech aggregation, e.g. [3-12] 
+- `N_PCA` between [5,30]
 - **embedding type**:
-    - FinBERT (truncated CLS / chunk-mean)
-    - FOMC-RoBERTa (truncated CLS / chunk-mean)
-    - no embeddings (macro-only baseline)
+    - FinBERT (chunk-mean)
+    - FOMC-RoBERTa (chunk-mean)
 - **dimensionality reduction of speeches**:
-     - Speech Embeddings as is (no dim reduction)
-         - without linear layer
-         - with linear layer
+     - (Speech Embeddings as is (no dim reduction))
      — PCA components per speech `N_PCA`, e.g. [5-30] 
      - Factor Analysis also `N_PCA`(just use same factor)
 - **embedding aggregator**:
     - mean 
     - (exponential) decay
-    - attention-based
-    - attention- & context-based
-- **normalizer** (per target, since series differ in scale/stationarity):
-    - `EncoderNormalizer(transformation="None")`  — no transform (after getting new macro data)  
-    - `GroupNormalizer` — global scaling across the group; tested before, currently dropped
+    - attention-context-based
 
-### (B) TFT Architecture Params ← *log-uniform / wide range*
-
-- `lstm_layers` — {1, 2, 4} (currently 4; was 2)
-- `hidden_size` — {16, 32, 64, 128} (currently 64; was 16)
-<!-- - `attention_head_size` — {1, 2, 4} (currently 2) -->
-- `hidden_continuous_size` — {8, 16, 32} (currently 8; basic.py uses 32)
-- `dropout` — uniform in [0.05, 0.4] (currently 0.2)
-
-### (C) Training / Optimisation Params ← *log-uniform*
-
-- `learning_rate` — log-uniform in [1e-4, 0.1] (currently 0.03)
-- `batch_size` — {16, 32, 64, 128} (currently 128 val, 16 train)
-- `max_epochs` — fixed at 50 (tuned via early stopping, not a sweep param)
 
 ## Evaluation Protocol
 
