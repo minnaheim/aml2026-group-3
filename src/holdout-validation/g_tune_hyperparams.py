@@ -27,14 +27,21 @@ from a_embedding_manager  import EmbeddingManager
 from e_main               import compute_metrics, _setup_wandb
 
 # defines hyperparam grid
-def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wandb: bool = True) -> float:
+def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, splits, dfb, use_wandb: bool = True) -> float:
     # speech-specific params only searched when embeddings are active — no wasted trials for macro-only
     if args.embedding is not None:
         speech_window = trial.suggest_int("speech_window_months", 3, 12)
         n_pca         = trial.suggest_int("n_pca", 5, 30)
+        # rebuild data for this trial's speech_window — unavoidable when the window is tuned
+        trial_dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=speech_window)
+        trial_dfb.load_fomc_dissent()
+        df = trial_dfb.process_data()
+        trial_splits, _ = trial_dfb.generate_split(df)
+        emb = EmbeddingManager(str(root), embedding=args.embedding, n_pca=n_pca, reduction=args.reduction).load()
+        trial_splits = trial_dfb.add_leakage_free_embeddings(trial_splits, emb)
     else:
-        speech_window = 12  # irrelevant for macro-only, fixed to avoid polluting the search space
-        n_pca         = 5   # irrelevant for macro-only
+        trial_dfb    = dfb      # precomputed once in main() — no disk I/O per trial
+        trial_splits = splits
 
     hparams = {
         # data / feature params
@@ -43,7 +50,7 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wan
         # architecture
         "hidden_size":            trial.suggest_categorical("hidden_size", [8, 16, 32, 64, 128, 256]),
         "hidden_continuous_size": trial.suggest_categorical("hidden_continuous_size", [2, 4, 8, 16]),
-        "lstm_layers":            trial.suggest_categorical("lstm_layers", [4, 8, 16, 32]),
+        "lstm_layers":            2,  # fixed — removed from search (was [4,8,16,32], too slow)
         "dropout":                trial.suggest_float("dropout", 0.05, 0.55),
         # optimisation
         "learning_rate":          trial.suggest_float("learning_rate", 1e-4, 0.15, log=True),
@@ -57,28 +64,14 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, use_wan
     }
     # TODO: why define everything separately and let it run here, not in original pipeline?
 
-    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=speech_window)
-    dfb.load_fomc_dissent()
-    df = dfb.process_data()
-    splits, _ = dfb.generate_split(df) # dont need holdout here
-
-    if args.embedding is not None:
-        emb = EmbeddingManager(
-            str(root),
-            embedding=args.embedding,
-            n_pca=n_pca,
-            reduction=args.reduction, # type of dim reduction
-        ).load()
-        splits = dfb.add_leakage_free_embeddings(splits, emb)
-
     # use only the first n_folds folds to keep each trial fast (set via --n-folds, default 2)
     # defined in --n-folds
-    splits = splits[: args.n_folds]
+    trial_splits = trial_splits[: args.n_folds]
 
-    runner = TFTRunner(dfb, hparams=hparams)
+    runner = TFTRunner(trial_dfb, hparams=hparams)
     maes = []
 
-    for fold_idx, s in enumerate(splits):
+    for fold_idx, s in enumerate(trial_splits):
         try:
             run_name = f"trial-{trial.number}-{args.target}-fold{fold_idx}"
             ckpt = runner.run(
@@ -133,6 +126,14 @@ def main():
     out_dir = root / "out" / "tuning" / args.target / f"{run_tag}_h{args.horizon}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # precompute data once — macro-only data is identical every trial (speech_window fixed at 12)
+    # embedding mode rebuilds per trial inside objective() since speech_window is tuned
+    # let's see if we can optimise this though
+    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=12)
+    dfb.load_fomc_dissent()
+    df  = dfb.process_data()
+    splits, _ = dfb.generate_split(df)
+
     study_path = out_dir / "optuna_study.pkl"
 
     # resume existing study if present
@@ -146,7 +147,7 @@ def main():
 
     t0 = time.time()
     study.optimize(
-        lambda trial: objective(trial, args, root, use_wandb=args.wandb),
+        lambda trial: objective(trial, args, root, splits, dfb, use_wandb=args.wandb),
         n_trials=args.n_trials,
         show_progress_bar=True,
     )

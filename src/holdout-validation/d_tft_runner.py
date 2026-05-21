@@ -31,7 +31,7 @@ HPARAMS_DEFAULTS = {
     "patience":               15,
     "max_epochs":             50,
     "learning_rate":          0.03,
-    "lstm_layers":            4,
+    "lstm_layers":            2,
     "hidden_size":            64,
     "attention_head_size":    2,
     "hidden_continuous_size": 8,

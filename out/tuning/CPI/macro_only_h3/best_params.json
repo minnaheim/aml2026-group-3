@@ -1,13 +1,12 @@
 {
-  "max_encoder_length": 25,
-  "hidden_size": 8,
-  "hidden_continuous_size": 2,
-  "lstm_layers": 4,
-  "dropout": 0.1417022549267169,
-  "learning_rate": 0.0009253395579376872,
+  "max_encoder_length": 33,
+  "hidden_size": 256,
+  "hidden_continuous_size": 4,
+  "dropout": 0.2885346428969588,
+  "learning_rate": 0.013488306476599472,
   "normalizer": "encoder_none",
-  "_best_mae": 1000000.0,
-  "_n_trials": 40,
-  "_total_minutes": 5.6,
-  "_minutes_per_trial": 0.1
+  "_best_mae": 0.0018449999999999999,
+  "_n_trials": 100,
+  "_total_minutes": 335.4,
+  "_minutes_per_trial": 3.4
 }
