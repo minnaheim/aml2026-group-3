@@ -1,0 +1,10 @@
+{
+  "aggregation": "attention",
+  "reduction": "fa",
+  "n_pca": 5,
+  "speech_window_months": 10,
+  "_best_mae": 0.00152,
+  "_n_trials": 20,
+  "_total_minutes": 32.9,
+  "_minutes_per_trial": 1.6
+}
