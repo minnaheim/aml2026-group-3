@@ -119,10 +119,16 @@ def compute_metrics(df: pd.DataFrame) -> dict:
         quantile_loss = float((ql_10 + ql_90) / 2)
 
     return {
-        "MAE": round(mae, 5),
-        "RMSE": round(rmse, 5),
-        "rel_RMSE": round(rel_rmse, 5),
-        "QuantileLoss": round(quantile_loss, 5) if not np.isnan(quantile_loss) else np.nan,
+        # raw
+        "MAE": mae,           
+        "RMSE": rmse,
+        "rel_RMSE": rel_rmse,
+        "QuantileLoss": quantile_loss if not np.isnan(quantile_loss) else np.nan,
+        # rounded versions for display
+        "MAE_display": round(mae, 5),
+        "RMSE_display": round(rmse, 5),
+        "rel_RMSE_display": round(rel_rmse, 5),
+        "QuantileLoss_display": round(quantile_loss, 5) if not np.isnan(quantile_loss) else np.nan,
     }
 
 
@@ -143,8 +149,14 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
                 m = compute_metrics(df)
                 rows.append({"model": model, "fold": fold, "target": target, **m})
 
-    metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE", "RMSE", "rel_RMSE", "QuantileLoss"] if c in pd.DataFrame(rows).columns]]
+    metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE_display", "RMSE_display", "rel_RMSE_display", "QuantileLoss_display"] if c in pd.DataFrame(rows).columns]]
     metrics_df = metrics_df.sort_values(by=["target", "model", "fold"]).reset_index(drop=True)
+    metrics_df = metrics_df.rename(columns={
+        "MAE_display": "MAE",
+        "RMSE_display": "RMSE", 
+        "rel_RMSE_display": "rel_RMSE",
+        "QuantileLoss_display": "QuantileLoss"
+    })
     metrics_df.to_csv(run_dir  / "metrics_per_fold.csv", index=False)
 
     avg_df = (
