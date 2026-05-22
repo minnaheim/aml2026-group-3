@@ -327,5 +327,26 @@ typst#slide[
     [Speech window (months)], [int], [3 – 12],
   )
   #v(0.5em)
-  Tuned separately for each of 9 combinations: \{CPI, GDP, UNRATE\} × \{3, 6, 12\} months
+  Tuned separately for each of 9 combinations: \{CPI, GDP, UNRATE\} $times$ \{3, 6, 12\} months
+]
+
+
+#slide[
+  = Hyperparameter Tuning: Stage 2 -- Optimal Hyperparameters
+#block[
+    #set text(size: 14.5pt)
+    #set par(leading: 0.3em)
+#table(
+    columns: (auto, auto, auto, auto, auto, auto, auto),
+    table.header(
+        [], table.cell(colspan: 3)[*FOMC-RoBERTa*], table.cell(colspan: 3)[*FinBERT*],
+        [*Target*], [*h=3*], [*h=6*], [*h=12*], [*h=3*], [*h=6*], [*h=12*],
+    ),
+    [*CPI*], [Mean \ PCA, n = 21 \ W = 3 \ MAE = 0.001847], [Attention \ FA, n = 10 \ W = 8 \ MAE = 0.001849], [*Attention \ PCA, n = 12\ W = 9 \ MAE = 0.001842*], [*Attention \ FA, n = 20 \ W = 5 \ MAE = 0.001846*], [*Decay \ PCA, n = 23 \ W = 3 \ MAE = 0.001846*], [Mean \ PCA, n = 8 \ W = 7 \ MAE = 0.001847],
+    [*GDP*], [*Mean \ PCA, n = 8 \ W = 7 \ MAE = 0.00154*], [Attention \ FA, n = 12 \ W = 8 \ MAE = 0.00171], [Attention \ FA, n = 5 \ W = 10 \ MAE = 0.00152], [Attention \ FA, n = 6 \ W = 12 \ MAE = 0.00170], [*Attention \ FA, n = 10 \ W = 8 \ MAE = 0.00157*], [*Decay \ PCA, n = 20 \ W = 12 \ MAE = 0.00151*],
+    [*UNRATE*], [Decay \ FA, n = 12 \ W = 11 \ MAE = 1.31293], [Attention \ FA, n = 6 \ W = 12 \ MAE = 1.31501], [*Mean \ PCA, n = 8 \ W = 7 \ MAE = 1.11597*], [*Mean \ FA, n = 23 \ W = 5 \ MAE = 1.26152*], [*Mean \ PCA, n = 14 \ W = 4 \ MAE = 1.30896*], [Mean \ PCA, n = 25 \ W = 4 \ MAE = 1.20808],
+)]
+
+where W refers to the speech window size and n to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold.
+
 ]
