@@ -1,10 +1,10 @@
 {
-  "aggregation": "decay",
-  "reduction": "pca",
-  "n_pca": 20,
-  "speech_window_months": 12,
-  "_best_mae": 0.0018449999999999999,
+  "aggregation": "attention",
+  "reduction": "fa",
+  "n_pca": 10,
+  "speech_window_months": 8,
+  "_best_mae": 0.0018493719174244951,
   "_n_trials": 20,
-  "_total_minutes": 48.0,
-  "_minutes_per_trial": 2.4
+  "_total_minutes": 51.4,
+  "_minutes_per_trial": 2.6
 }
