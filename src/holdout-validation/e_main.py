@@ -8,6 +8,7 @@ Usage:
     python src/holdout-validation/e_main.py --targets UNRATE --device cuda
 """
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -44,6 +45,50 @@ def _setup_wandb() -> None:
             key = input("Enter your W&B API key (or set WANDB_API_KEY / mount secret): ").strip()
             os.environ["WANDB_API_KEY"] = key
     wandb.login()
+
+
+# ── tuned hparams ────────────────────────────────────────────────────────────
+
+def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: int) -> tuple[dict, dict, str | None]:
+    """Load best params saved by hyperparameter tuning.
+
+    If embedding is None, scans out/tuning/{target}/ for *_h{horizon} dirs and
+    auto-selects the one with the lowest _best_mae (vs macro_only baseline).
+
+    Returns (arch_params, emb_params, resolved_embedding) — params filtered of '_' keys.
+    arch_params: from macro_only_h{horizon}/best_params.json
+    emb_params:  from {embedding}_h{horizon}/best_params.json (empty if no embedding wins)
+    """
+    tuning_dir = root / "out" / "tuning" / target
+    suffix     = f"_h{horizon}"
+
+    def _read_raw(path: Path) -> dict:
+        if path.exists():
+            return json.loads(path.read_text())
+        print(f"  [tuned] WARNING: {path} not found — using defaults")
+        return {}
+
+    def _strip_private(d: dict) -> dict:
+        return {k: v for k, v in d.items() if not k.startswith("_")}
+
+    # auto-detect best embedding when not explicitly provided
+    if embedding is None:
+        macro_raw = _read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json")
+        best_mae  = macro_raw.get("_best_mae", float("inf"))
+        best_emb  = None
+        for d in sorted(tuning_dir.iterdir()):  # sorted for determinism
+            if d.is_dir() and d.name.endswith(suffix) and not d.name.startswith("macro_only"):
+                raw = _read_raw(d / "best_params.json")
+                if raw.get("_best_mae", float("inf")) < best_mae:
+                    best_mae = raw["_best_mae"]
+                    best_emb = d.name[: -len(suffix)]  # strip _h{horizon} suffix
+        embedding = best_emb
+        label = f"'{embedding}' (MAE={best_mae:.6f})" if embedding else f"macro-only (MAE={best_mae:.6f})"
+        print(f"  [tuned] auto-selected: {label}")
+
+    arch_params = _strip_private(_read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json"))
+    emb_params  = _strip_private(_read_raw(tuning_dir / f"{embedding}{suffix}" / "best_params.json")) if embedding else {}
+    return arch_params, emb_params, embedding
 
 
 # ── metrics ──────────────────────────────────────────────────────────────────
@@ -214,7 +259,7 @@ def main():
     )
     
     parser.add_argument(
-        "--horizon", type=int, default=12, choices=[1, 6, 12],
+        "--horizon", type=int, default=12, choices=[3, 6, 12],
         help="Forecast horizon in months (default: 12)",
     )
     
@@ -232,6 +277,15 @@ def main():
     parser.add_argument(
         "--run-name", default="default",
         help="Unique name for this run (used for output subfolder)",
+    )
+
+    parser.add_argument(
+        "--tuned", action="store_true", default=False,
+        help=(
+            "Load best hyperparams from out/tuning/{TARGET}/macro_only_h{horizon}/ "
+            "(arch) and out/tuning/{TARGET}/{embedding}_h{horizon}/ (emb). "
+            "Embedding params are taken from the first target; arch params are per-target."
+        ),
     )
 
     # ── TFT hyperparams (override defaults from HPARAMS_DEFAULTS) ────────────
@@ -259,10 +313,27 @@ def main():
     if args.wandb:
         _setup_wandb()
 
+    # ── apply tuned embedding params (from first target) before data loading ──
+    # embedding type is auto-detected from best_mae if not explicitly given
+    if args.tuned:
+        _, emb_params, resolved_emb = load_tuned_hparams(
+            root, args.targets[0], args.embedding, args.horizon
+        )
+        args.embedding = resolved_emb  # may stay None (macro-only wins) or be auto-set
+        if emb_params:
+            args.aggregation   = emb_params.get("aggregation",          args.aggregation)
+            args.reduction     = emb_params.get("reduction",            args.reduction)
+            args.n_pca         = emb_params.get("n_pca",                args.n_pca)
+            args.speech_window = emb_params.get("speech_window_months", args.speech_window)
+            print(f"[tuned] embedding params from '{args.targets[0]}': {emb_params}")
+        if len(args.targets) > 1:
+            print(f"[tuned] NOTE: embedding/arch params for first target '{args.targets[0]}' guide data loading")
+
     print(f"Targets   : {args.targets}")
     print(f"Device    : {args.device}")
     print(f"Embedding : {args.embedding or 'none'}")
     print(f"Horizon   : {args.horizon}")
+    print(f"Tuned     : {args.tuned}")
     print(f"W&B       : {args.wandb}")
     print(f"Output    : {out_dir}\n")
 
@@ -308,10 +379,9 @@ def main():
         f"Holdout : [{holdout['date'].min().date()} – {holdout['date'].max().date()}] "
         f"({len(holdout)} rows)\n"
     )
-    # initiate runners
-    ar_runner    = ARRunner(dfb,    max_prediction_length=hparams["max_prediction_length"])
-    arima_runner = ARIMARunner(dfb, max_prediction_length=hparams["max_prediction_length"])
-    tft_runner   = TFTRunner(dfb,   hparams=hparams)
+    # initiate baseline runners (stateless between targets)
+    ar_runner    = ARRunner(dfb,    max_prediction_length=args.horizon)
+    arima_runner = ARIMARunner(dfb, max_prediction_length=args.horizon)
 
     # results[model][fold_num][target] = predictions DataFrame
     results = {"TFT": {s["fold"]: {} for s in splits}}
@@ -319,10 +389,20 @@ def main():
         results["AR"]    = {s["fold"]: {} for s in splits}
         results["ARIMA"] = {s["fold"]: {} for s in splits}
 
-    # ── 2. run all models for each fold × target ──────────────────────────────
-    for fold_idx, s in enumerate(splits):
-        fold_num = s["fold"]
-        for target in args.targets:
+    # ── 2. run all models for each target × fold ──────────────────────────────
+    # outer loop over targets so we can load per-target tuned arch hparams once
+    for target in args.targets:
+        # load per-target tuned architecture hparams if --tuned
+        if args.tuned:
+            arch_params, _, _ = load_tuned_hparams(root, target, args.embedding, args.horizon)
+            target_hparams = {**hparams, **arch_params}
+            print(f"\n[tuned] {target} arch params: {arch_params}")
+        else:
+            target_hparams = hparams
+        tft_runner = TFTRunner(dfb, hparams=target_hparams)
+
+        for fold_idx, s in enumerate(splits):
+            fold_num = s["fold"]
             print(f"\n{'─' * 55}")
             print(f" Fold {fold_num} | Target: {target}")
             print(f"{'─' * 55}")

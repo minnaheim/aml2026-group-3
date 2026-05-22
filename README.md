@@ -40,6 +40,16 @@ Below you will find a project overview of the most important files.
 
 ---
 
+## Post HP tuning, try out the "best models"
+
+```bash
+python src/holdout-validation/e_main.py --targets UNRATE --tuned
+# test HP tuning i just did
+python src/holdout-validation/e_main.py --targets UNRATE --horizon 6 --embedding finbert --tuned
+# without embeddings:
+python src/holdout-validation/e_main.py --targets UNRATE --horizon 6 --tuned
+```
+
 ## Running the pipeline
 
 Default targets (`CPI`, `UNRATE`, `GDP`) on GPU with W&B logging:
