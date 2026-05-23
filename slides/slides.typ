@@ -274,13 +274,21 @@
 ]
 
 #slide[
-  = Data Exploration:
-  -   show head of final dataframe (train,e.g.)
+  = Inspect Data Frame:
+  // titles of vars arent good yet... still need to fix this
+  #place(center)[
+    #v(2em)
+    #image("figures/df_head.png", width: 100%)
+  ]
 ]
 
 #slide[
-  = Data Exploration 2:
-  - show plotted data (in dfb)
+  = Inspect Target Vars
+  // Gray bands = NBER recessions; CPI and GDP are log-differenced
+  #place(center)[
+    #v(0.5em)
+    #image("figures/target_vars.png", width: 65%)
+  ]
 ]
 
 #slide[

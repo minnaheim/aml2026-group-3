@@ -55,6 +55,10 @@ def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: 
     Returns (arch_params, emb_params, embedding) — params filtered of '_' keys.
     arch_params: always from macro_only_h{horizon}/best_params.json (target-specific TFT arch)
     emb_params:  from {embedding}_h{horizon}/best_params.json, or {} if embedding is None
+
+    embedding == "auto": scan all tuning dirs for target+horizon, pick the one with lowest _best_mae
+    embedding == None:   macro-only mode, no emb_params
+    embedding == <name>: load params for that specific embedding
     """
     tuning_dir = root / "out" / "tuning" / target
     suffix     = f"_h{horizon}"
@@ -68,8 +72,23 @@ def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: 
     def _strip_private(d: dict) -> dict:
         return {k: v for k, v in d.items() if not k.startswith("_")}
 
-    # if embedding is None: macro-only mode — arch params from macro_only dir, no emb_params
-    # (auto-detection of best embedding belongs in the tuning stage, not here)
+    # auto-detect best embedding from tuning dirs when --embedding passed without a value
+    if embedding == "auto":
+        macro_raw = _read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json")
+        best_mae  = macro_raw.get("_best_mae", float("inf"))
+        best_emb  = None
+        if tuning_dir.exists():
+            for d in sorted(tuning_dir.iterdir()):  # sorted for determinism
+                if d.is_dir() and d.name.endswith(suffix) and not d.name.startswith("macro_only"):
+                    raw = _read_raw(d / "best_params.json")
+                    if raw.get("_best_mae", float("inf")) < best_mae:
+                        best_mae = raw["_best_mae"]
+                        best_emb = d.name[: -len(suffix)]  # strip _h{horizon} suffix
+        embedding = best_emb
+        label = f"'{embedding}' (MAE={best_mae:.6f})" if embedding else f"macro-only (MAE={best_mae:.6f})"
+        print(f"  [tuned] auto-selected embedding: {label}")
+
+    # macro-only mode: arch params only, no emb_params
     arch_params = _strip_private(_read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json"))
     emb_params  = _strip_private(_read_raw(tuning_dir / f"{embedding}{suffix}" / "best_params.json")) if embedding else {}
     return arch_params, emb_params, embedding
@@ -259,9 +278,12 @@ def main():
         help="Compute device for TFT (default: cpu)",
     )
     parser.add_argument(
-        "--embedding", default=None,
-        choices=["fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", "roberta", "llama3.1"],
-        help="Speech embedding to include (default: none — macro-only mode)",
+        "--embedding", nargs="?", const="auto", default=None,
+        choices=["auto", "fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", "roberta", "llama3.1"],
+        help=(
+            "Speech embedding: omit for macro-only; pass flag alone (--embedding) to "
+            "auto-select best from tuning dirs; or give a name (--embedding fomc-roberta)"
+        ),
     )
     
     parser.add_argument(

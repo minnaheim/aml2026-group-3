@@ -33,7 +33,7 @@
       top:    if y == 0 { 1pt } else if y == 1 { 0.4pt } else { none },
       bottom: if y == n { 1pt } else { none },
     ),
-    [*Model*], [*Target*], [*MAE*], [*RMSE*],
+    [*Model*], [*Target*], [*MAE* #sym.arrow.b], [*RMSE* #sym.arrow.b],
     ..rows.map(row => {
       let best = float(row.at(i-mae)) == min-mae(row.at(i-target))
       let cell(v) = if best { [*#v*] } else { [#v] }
