@@ -1,4 +1,5 @@
 #import "template.typ": *
+#import "figures/data_timeline.typ": data-timeline
 
 #show: presentation
 #set par(leading: 1.2em)
@@ -15,113 +16,126 @@
   ]
 
 
-  #speaker-notes[
-    My name is Minna Heim Bla bla
-  ]
+  // #speaker-notes[
+  //   My name is Minna Heim Bla bla
+  // ]
 ]
 
 #show: content-slides
 
 #slide[
   = Motivation
-  - Macro forecasts matter for 
-      - Governments
-      - Financial markets
-      - *Central banks*
+  - Macro forecasts matter for
+    - Governments
+    - Financial markets
+    - *Central banks*
   #only("2-")[
-  - The Federal Reserve (Fed) has a *dual mandate*: 
-    + Price stability
-    + Maximum employment
-  - Accurate forecasts of inflation, unemployment, and GDP are crucial for interest rate decisions
+    - The Federal Reserve (Fed) has a *dual mandate*:
+      + Price stability
+      + Maximum employment
+    - Accurate forecasts of inflation, unemployment, and GDP are crucial for interest rate decisions
+  ]
+  #only("3-")[
+    $=>$ Can we do better than standard macro models?
+  ]
 ]
-#only("3-")[
-  $=>$ Can we do better than standard macro models?
-]
-]
-
+// TODO: no mention of problem setting here, maybe included?
 #slide[
   = Research Question
   - The Fed communicates with the public through official statements and speeches
   - It may communicate additional information:
-      + *Superior information*: private data and internal models not available to the public
-      + *Forward guidance*: signals about future policy to guide market expectations
-  #only("2-")[ 
-  #v(1em)
-  $=>$ *Do Fed speeches contain information useful to forecast macroeconomic indicators?*
-]
-]
-
-// #slide[
-//   = Our Approach
-
-//   - Statistical Benchmarks:  
-//       - AR(p)
-//       - ARIMA(p,d,q)
-
-//   - Temporal Fusion Transformer (Macro Only)
-//   - Temporal Fusion Transformer (with Fed Speeches)
-// ]
-
-//#slide[
-//  = Data
-//  *3 types of Data:*
-// this is just an example :)
-  // #only("2-") shows this only from slide 2 onwards
-//  #only("2-")[
-//   - Macro Data
-//        - Quarterly, Monthly, Daily
-//        - E.g.: CPI, UNRATE, GDP, Exchange Rates, etc. 
-//  ]
-//  #only("3-")[
-//    - Meta Data 
-//        - Macro Metadata (Popularity, Frequency, Units)
-//        - FOMC Dissent 
-//        - Days till next FOMC Meeting, etc.
-//  ]
-//  #only("4-")[
-//    - Embedded Fed Speeches
-//        - E.g. _"Remarks by Mr Roger W Ferguson Jr, Vice-Chairman of the Board of Governors of the US Federal Reserve System, before the National Economic Association in Boston on 7 January 2000."_
-//        - Embedded (via FOMC-RoBERTa, FinBERT and Ollama,)
-//        - Dimensionality Reduction (None, PCA, Factor Analysis)
-//        - Speech Aggregation (mean, exp. decay, (context)attention-based)
-//
-//  ]
-//]
-
-#slide[
-
-  = Show Data...
-
-  by plotting, e.g.
-
-CPI, UNRATE, GDP plots (stationarity/non-stationarity) => maybe just one plot with the log differenced?
-
-Mention log-differencing for GDP/CPI
-
-Timeline (Zeitstrahl) could live here or be its own slide
-  
+    + *Superior information*: private data and internal models not available to the public
+    + *Forward guidance*: signals about future policy to guide market expectations
+  #only("2-")[
+    #v(1em)
+    $=>$ *Do Fed speeches contain information useful to forecast macroeconomic indicators?*
+  ]
 ]
 
 #slide[
+  = Data Alignment
+  // #data-timeline
+    #align(center)[
+      #v(2em)
+    #box(width: 90%)[
+      #import "figures/data_timeline.typ": 
+      #data-timeline
 
-  = Show Data 2
-
-
-Timeline (Zeitstrahl) could live here or be its own slide
-  
+    ]
+  ]
 ]
 
 #slide[
-  = Models
-  - Statistical Benchmarks (AR, ARIMA)
-  - Temporal Fusion Transformer @TFT
+  #v(1fr)
+  #align(center)[= Models]
+  #v(1fr)
+]
 
+
+
+#slide[
+  = Benchmarks
+
+  #let hi-int = rgb("#C96820")  // integration: orange
+  #let hi-ma  = rgb("#3A6BB5")  // MA:          blue
+
+  #v(5em)
+  #grid(
+    columns: (15em, 1fr),
+    column-gutter: 1.2em,
+    row-gutter: 0.9em,
+    align: (right + horizon, left + horizon),
+
+    [AR(p)],[$display(y_t = c + sum_(i=1)^p phi_i y_(t-i) + epsilon_t)$],
+
+  // show arima only below?
+    only("2-")[    
+      #v(2em)
+      ARIMA(p, d, q)
+    ],
+    only("2-")[
+        #v(2em)
+        $display(
+        #text(fill: hi-int)[$Delta^d$] 
+        y_t = c
+        + sum_(i=1)^p phi_i thin 
+        #text(fill: hi-int)[$Delta^d$]
+         y_(t-i)
+        + #text(fill: hi-ma)[$sum_(j=1)^q theta_j epsilon_(t-j)$]
+        + epsilon_t
+      )$
+    ],
+  )
+
+  #only("2-")[
+    #v(2em)
+    #text(size: 0.82em)[
+      #box(fill: hi-int, width: 0.7em, height: 0.7em, radius: 0.1em)
+      #h(0.2em) Integration: $d$-th difference of $y_t$
+      #h(1.5em)
+      #box(fill: hi-ma, width: 0.7em, height: 0.7em, radius: 0.1em)
+      #h(0.2em) MA component: $q$ lags of residuals $epsilon_t$
+    ]
+  ]
 ]
 
 #slide[
   = Temporal Fusion Transformers
-  Add Abbildung from TFT paper here maybe?; then explain it, also saying what variables we use for the static covariates etc; in appendix, list what the actual variables are?
+  // Add Abbildung from TFT paper here maybe?; then explain it, also saying what variables we use for the static covariates etc; in appendix, list what the actual variables are?
+  // if I use AR(IMA) equation, should i use TFT equations too?
+    #place(center)[
+    #v(1em)
+    #image("figures/tft-arch.jpg", height: 90%)
+  ]
 
+]
+
+
+// maybe as a nice übergang
+#slide[
+  #v(1fr)
+  #align(center)[= Speech Embeddings]
+  #v(1fr)
 ]
 
 #slide[
@@ -130,20 +144,21 @@ Timeline (Zeitstrahl) could live here or be its own slide
   + *FinBERT*: BERT-based, pre-trained on financial statements @yang2020finbertpretrainedlanguagemodel
   + *FOMC-RoBERTa*: fine-tuned on FOMC data, hawkish/dovish classification @fomc_roberta_paper
   #only("2-")[
-  #v(0.5em)
-  *Processing*: chunk-and-average (512-token windows, 128-token overlap)
-  - Assumption: information spread across entire speech, not just the beginning
-  #v(0.5em)
-  *Dimensionality reduction*: 768 $=>$ $X$ dims via Principal Component Analysis or Factor Analysis
+    #v(0.5em)
+    *Processing*: chunk-and-average (512-token windows, 128-token overlap)
+    - Assumption: information spread across entire speech, not just the beginning
+    #v(0.5em)
+    *Dimensionality reduction*: 768 $=>$ $X$ dims via Principal Component Analysis or Factor Analysis
     - $X$ is treated as hyperparameter
   ]
-  #only("3-")[
-  #v(0.5em)
-  *Robustness*: replace embeddings with Kafka texts $=>$ should add no predictive signal
-  ]
+  // TODO: either we choose to do robustness here, or we remove this and put this to robustness
+  // #only("3-")[
+  // #v(0.5em)
+  // *Robustness*: replace embeddings with Kafka texts $=>$ should add no predictive signal
+  // ]
 ]
 
- #slide[
+#slide[
   = Speech Alignment
 
   Speeches are held at *irregular* and *daily* frequency: how to align with monthly horizon?
@@ -158,7 +173,7 @@ Timeline (Zeitstrahl) could live here or be its own slide
     - Fitted on training data only $=>$ no leakage!
   #v(0.5em)
   All methods also track: voter speech ratio, chair speech ratio, gender share
-  
+
 ]
 
 
@@ -169,13 +184,13 @@ Timeline (Zeitstrahl) could live here or be its own slide
     - Bayesian search via Optuna (TPE sampler)
     - 2-fold CV, up to 50 trials
     - Includes: encoder length, hidden size, normalizer
-    // MOVE THIS TO APPENDIX
-    // - Search space:
-      // - Encoder length: 12–48
-      // - Hidden size: \{8, 16, 32, 64, 128, 256\}
-      // - Dropout: 0.05–0.55
-      // - Learning rate: $10^(-4)$–$0.15$ (log scale)
-      // - Normalizer: \{encoder-none, group\}
+  // MOVE THIS TO APPENDIX
+  // - Search space:
+  // - Encoder length: 12–48
+  // - Hidden size: \{8, 16, 32, 64, 128, 256\}
+  // - Dropout: 0.05–0.55
+  // - Learning rate: $10^(-4)$–$0.15$ (log scale)
+  // - Normalizer: \{encoder-none, group\}
   + *Stage 2: Speech Embedding Params*
     - Architecture fixed from Stage 1
     - Tune: aggregation, reduction, PCA dims, speech window
@@ -185,16 +200,21 @@ Timeline (Zeitstrahl) could live here or be its own slide
   = Evaluation Protocol
   - *Walk-forward cross-validation*: expanding window, never use future data
   - *Metric*: MAE (mean absolute error), RMSE ????
-ADJUST HERE
+  ADJUST HERE
   - *Multi-step forecasting*: predictions in non-overlapping 12-month windows
     - Context: training data + model's own previous predictions
     - Same assumption for AR, ARIMA and TFT $=>$ fair comparison
   #only("2-")[
-  #v(0.5em)
-  $=>$ All models evaluated on the same information set
+    #v(0.5em)
+    $=>$ All models evaluated on the same information set
   ]
 ]
 
+#slide[
+  #v(1fr)
+  #align(center)[= Results]
+  #v(1fr)
+]
 
 #slide[
   = Results
@@ -246,25 +266,9 @@ ADJUST HERE
   #v(1fr)
 ]
 
- 
- #slide[
-  = Variable List
-The TFT takes four different types of variables:
+// TODO: add slide on data visualisation (to explain why UNRATE vs. CPI, GDP so different in MAE!)
 
-+ *Static categoricals*: time-invariant, categorical
-  - Identifier and frequency of each time series
-+ *Static reals*: time-invariant, continuous
-  - Number downloads time series from FRED, how long time series has existed
-+ *Time-Varying Known Reals*: time-varying, known
-  - Day of week, month, year; if day is holiday
-  - FOMC Meeting dates
-+ *Time-Varying Unknown Reals*: time-varying, unknown
-  - Macroeconomic variables, speech embeddings, FOMC dissents
-
-]
-
-
- #slide[
+#slide[
   = Variable List: Macroeconomic Variables
   + *Target variables*
     - CPI, UNRATE, GDP (quarterly: forward-fill missing months) $=>$ AR and ARIMA only take targets
@@ -274,17 +278,51 @@ The TFT takes four different types of variables:
       - Higher-frequency variables: take mean *and* std per month (volatility)
     - Lags at 1, 2, 6, 12 months for all target variables
   + *Preprocessing*: log-difference of CPI, GDP, PAYEMS, INDPRO, AWHMAN
+]
+
+#slide[
+  = Data Exploration:
+  -   show head of final dataframe (train,e.g.)
+]
+
+#slide[
+  = Data Exploration 2:
+  - show plotted data (in dfb)
+]
+
+#slide[
+  = Variable List
+  The TFT takes four different types of variables:
+
+  + *Static categoricals*: time-invariant, categorical
+    - Identifier and frequency of each time series
+  + *Static reals*: time-invariant, continuous
+    - Number downloads time series from FRED, how long time series has existed
+  + *Time-Varying Known Reals*: time-varying, known
+    - Day of week, month, year; if day is holiday
+    - FOMC Meeting dates
+  + *Time-Varying Unknown Reals*: time-varying, unknown
+    - Macroeconomic variables, speech embeddings, FOMC dissents
 
 ]
 
+#slide[
+  = TFT: Input Types
+  // cite paper here?
+  #place(center)[
+    #v(1em)
+    #image("figures/tft-inputs.png", height: 80%)
+  ]
+]
 
- #slide[
+
+#slide[
   = Dimensionality Reduction
 
   FinBERT and FOMC-RoBERTa embeddings are of dimension $768$ per speech
-  
+
   $=>$ Dimensionality reduction needed for TFT input
-  
+
   We test two methods (number of components $X$ is hyperparameter, fit only on training data):
   + *PCA*: projects embeddings onto $X$ principal components
     - 20 components $approx$ 80% of variance explained
@@ -299,7 +337,7 @@ Based on your tuning code, here are the two appendix slides filled out:
 typst#slide[
   = Hyperparameter Tuning: Stage 1 Search Space
   Architecture tuned on macro-only TFT (per target × horizon):
-  
+
   #table(
     columns: (auto, auto, auto),
     [*Parameter*], [*Type*], [*Range / Values*],
@@ -333,20 +371,40 @@ typst#slide[
 
 #slide[
   = Hyperparameter Tuning: Stage 2 -- Optimal Hyperparameters
-#block[
+  #block[
     #set text(size: 14.5pt)
     #set par(leading: 0.3em)
-#table(
-    columns: (auto, auto, auto, auto, auto, auto, auto),
-    table.header(
+    #table(
+      columns: (auto, auto, auto, auto, auto, auto, auto),
+      table.header(
         [], table.cell(colspan: 3)[*FOMC-RoBERTa*], table.cell(colspan: 3)[*FinBERT*],
         [*Target*], [*h=3*], [*h=6*], [*h=12*], [*h=3*], [*h=6*], [*h=12*],
-    ),
-    [*CPI*], [Mean \ PCA, n = 21 \ W = 3 \ MAE = 0.001847], [Attention \ FA, n = 10 \ W = 8 \ MAE = 0.001849], [*Attention \ PCA, n = 12\ W = 9 \ MAE = 0.001842*], [*Attention \ FA, n = 20 \ W = 5 \ MAE = 0.001846*], [*Decay \ PCA, n = 23 \ W = 3 \ MAE = 0.001846*], [Mean \ PCA, n = 8 \ W = 7 \ MAE = 0.001847],
-    [*GDP*], [*Mean \ PCA, n = 8 \ W = 7 \ MAE = 0.00154*], [Attention \ FA, n = 12 \ W = 8 \ MAE = 0.00171], [Attention \ FA, n = 5 \ W = 10 \ MAE = 0.00152], [Attention \ FA, n = 6 \ W = 12 \ MAE = 0.00170], [*Attention \ FA, n = 10 \ W = 8 \ MAE = 0.00157*], [*Decay \ PCA, n = 20 \ W = 12 \ MAE = 0.00151*],
-    [*UNRATE*], [Decay \ FA, n = 12 \ W = 11 \ MAE = 1.31293], [Attention \ FA, n = 6 \ W = 12 \ MAE = 1.31501], [*Mean \ PCA, n = 8 \ W = 7 \ MAE = 1.11597*], [*Mean \ FA, n = 23 \ W = 5 \ MAE = 1.26152*], [*Mean \ PCA, n = 14 \ W = 4 \ MAE = 1.30896*], [Mean \ PCA, n = 25 \ W = 4 \ MAE = 1.20808],
-)]
+      ),
+      [*CPI*],
+      [Mean \ PCA, n = 21 \ W = 3 \ MAE = 0.001847],
+      [Attention \ FA, n = 10 \ W = 8 \ MAE = 0.001849],
+      [*Attention \ PCA, n = 12\ W = 9 \ MAE = 0.001842*],
+      [*Attention \ FA, n = 20 \ W = 5 \ MAE = 0.001846*],
+      [*Decay \ PCA, n = 23 \ W = 3 \ MAE = 0.001846*],
+      [Mean \ PCA, n = 8 \ W = 7 \ MAE = 0.001847],
 
-where W refers to the speech window size and n to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold.
+      [*GDP*],
+      [*Mean \ PCA, n = 8 \ W = 7 \ MAE = 0.00154*],
+      [Attention \ FA, n = 12 \ W = 8 \ MAE = 0.00171],
+      [Attention \ FA, n = 5 \ W = 10 \ MAE = 0.00152],
+      [Attention \ FA, n = 6 \ W = 12 \ MAE = 0.00170],
+      [*Attention \ FA, n = 10 \ W = 8 \ MAE = 0.00157*],
+      [*Decay \ PCA, n = 20 \ W = 12 \ MAE = 0.00151*],
+
+      [*UNRATE*],
+      [Decay \ FA, n = 12 \ W = 11 \ MAE = 1.31293],
+      [Attention \ FA, n = 6 \ W = 12 \ MAE = 1.31501],
+      [*Mean \ PCA, n = 8 \ W = 7 \ MAE = 1.11597*],
+      [*Mean \ FA, n = 23 \ W = 5 \ MAE = 1.26152*],
+      [*Mean \ PCA, n = 14 \ W = 4 \ MAE = 1.30896*],
+      [Mean \ PCA, n = 25 \ W = 4 \ MAE = 1.20808],
+    )]
+
+  where W refers to the speech window size and n to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold.
 
 ]

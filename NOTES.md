@@ -38,9 +38,17 @@
 - [x] For AR / ARIMA: expanding / rolling window
 - [x] For TFT: one-holdout
   - switched to 3-fold
-- [ ] **Quantile Loss/q-Risk**
+- [x] **Quantile Loss/q-Risk**
 - [ ] **rRMSE**, so relative RMSE error from including vs. not including speeches in TFT (can calculate from what we have)
 - [ ] **variable selection**: we already have the interpret_output function but we aren't saving output yet => Save!!
+
+### Presentation: 
+
+- [x] show data -> check its correct !!
+- [ ] check optuna = bayesian optimisation
+- [ ] AR, ARIMA -> formula for AR, ARIMA (find cool animation?)
+- [x] TFT -> use diagram from paper (write notes?)
+- [x] remove speech embeddings text 
 
 
 ### CV PIPELINE
@@ -66,8 +74,6 @@
 - Keep in mind: Fed has blackout period for 10 days before FOMC
 - Give calendar-weights: have the days to the next FOMC meeting as an additional input / covariate. This should work quite well since (almost) all FOMC are pre-scheduled (excep for e.g., 9/11) and thus, there shouldn't be any data leakage
   - Should be determined within TFT
- 
-
 
 
  ## Things that might come up later
