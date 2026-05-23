@@ -22,37 +22,39 @@ EXPERIMENTS = [
         "aggregation": "mean",
     },
     # fomc-roberta embeddings
+    # TODO: FIGURE OUT HOW TO DO ABLATION HERE
+    # NOT INCLUDED BECAUSE THESE ARENT BEST PARAM COMBINATION FOR H=12
+    # {
+    #     "run_name":    "fomc_roberta_mean",
+    #     "embedding":   "fomc-roberta",
+    #     "aggregation": "mean",
+    # },
+    # {
+    #     "run_name":    "fomc_roberta_decay",
+    #     "embedding":   "fomc-roberta",
+    #     "aggregation": "decay",
+    # },
     {
-        "run_name":    "fomc_roberta_mean",
+        "run_name":    "fomc_roberta_attention",
         "embedding":   "fomc-roberta",
-        "aggregation": "mean",
-    },
-    {
-        "run_name":    "fomc_roberta_decay",
-        "embedding":   "fomc-roberta",
-        "aggregation": "decay",
-    },
-    {
-        "run_name":    "fomc_roberta_context_attention",
-        "embedding":   "fomc-roberta",
-        "aggregation": "context_attention",
+        "aggregation": "attention",
     },
     # finbert embeddings
-    {
-        "run_name":    "finbert_mean",
-        "embedding":   "finbert",
-        "aggregation": "mean",
-    },
-    {
-        "run_name":    "finbert_decay",
-        "embedding":   "finbert",
-        "aggregation": "decay",
-    },
-    {
-        "run_name":    "finbert_context_attention",
-        "embedding":   "finbert",
-        "aggregation": "context_attention",
-    },
+    # {
+    #     "run_name":    "finbert_mean",
+    #     "embedding":   "finbert",
+    #     "aggregation": "mean",
+    # },
+    # {
+    #     "run_name":    "finbert_decay",
+    #     "embedding":   "finbert",
+    #     "aggregation": "decay",
+    # },
+    # {
+    #     "run_name":    "finbert_attention",
+    #     "embedding":   "finbert",
+    #     "aggregation": "attention",
+    # },
     # kafka variants
     {
         "run_name":    "fomc_roberta_kafka_decay",
@@ -71,7 +73,7 @@ def main():
     parser = argparse.ArgumentParser(description="Ablation study runner")
     parser.add_argument("--device",  default="cpu", choices=["cpu", "mps", "cuda"])
     parser.add_argument("--targets", nargs="+", default=["CPI", "UNRATE", "GDP"])
-    parser.add_argument("--horizon", type=int, default=12)
+    parser.add_argument("--horizon", type=int, default=12)     # just use 12 for now?
     parser.add_argument("--no-baselines", action="store_true", default=False)
     parser.add_argument("--wandb",        action="store_true", default=False,
                         help="Enable W&B logging for each TFT run")
@@ -84,6 +86,7 @@ def main():
     main_script  = Path(__file__).parent / "e_main.py"
     # re-write experiments for each ablation run (or else confusion)
     master_path  = Path(__file__).parents[2] / "out" / "holdout" / "experiments.csv"
+    # redo experiments everytime
     if master_path.exists():
         master_path.unlink()
 
@@ -107,6 +110,7 @@ def main():
             "--horizon",    str(args.horizon),
             "--run-name",   run_name,
             "--aggregation", exp["aggregation"],
+            "--tuned",       # always use tuned hyperparameters
         ]
         if exp["embedding"]:
             cmd += ["--embedding", exp["embedding"]]

@@ -4,7 +4,7 @@
 ### DATA
 - [x] Get more variables with long time series dimension from FRED etc.
 - [x] Add Composite Leading Indicator data from FRED: https://fred.stlouisfed.org/series/USALOLITONOSTSAM. The monthly series are available from January 1955 onwards. The data are compiled by the OECD (https://www.oecd.org/en/data/datasets/oecd-composite-leading-indicators-clis.html) and generally released in the first week of every month (7th-14th).
-- [ ] Discuss **vintages** with David: we write about them in problemsetting but seems to be much harder (and not very ML-y) than anticipated.
+- [x] Discuss **vintages** with David: we write about them in problemsetting but seems to be much harder (and not very ML-y) than anticipated.
 
 ### EMBEDDINGS
 - [x] Test different methods => be creative
@@ -15,19 +15,19 @@
   - [x] attention (just one layer): once on full training, once including macro state, so somewhat 'context aware'
   - [ ] Voter rights are included in model, what about encoding of position within Fed? (So Chair = highest rank, then Governor, then President?)
   - [ ] Describe in PROBLEMSETTING.md
-- [ ] **Normalize PCA**: probably necessary! if it were to dramatically decrease performance, ask David
-- [ ] Do alternative dimensionality reductions (WIP)
+- [x] **Normalize PCA**: probably necessary! if it were to dramatically decrease performance, ask David
+- [x] Do alternative dimensionality reductions (WIP)
   - [x] PCA number of components => should be hyperparameter
   - [ ] No dimensionality reduction => run on renku (check if works or hopelessly overfitting, I expect the latter)
   - [x] Factor analysis
-  - [ ] n_pca (for pca and fa) into hyperparameter tuning!
-  - [ ] Describe in PROBLEMSETTING.md
+  - [x] n_pca (for pca and fa) into hyperparameter tuning!
+  - [x] Describe in PROBLEMSETTING.md
 - [ ] Also run using the 512 mean and CLS versions, not just full speeches   
       
 ### TFT
 - [x] Additional metadata from FRED
 - [x] Important: also test on alternative texts once (e.g. Kafka text) to see how much TFT improvements are from speech content vs. just more data for the TFT to train on
-- [ ] Hyperparameter tuning (WIP)
+- [x] Hyperparameter tuning (WIP)
 - [x] **Speaker characteristics!!** We can do: position in fed, year of birth, education, gender, minority, district, ...
  
 
@@ -38,10 +38,10 @@
 - [x] For AR / ARIMA: expanding / rolling window
 - [x] For TFT: one-holdout
   - switched to 3-fold
-- [ ] **Quantile Loss/q-Risk**
+- [x] **Quantile Loss/q-Risk**
 - [ ] **rRMSE**, so relative RMSE error from including vs. not including speeches in TFT (can calculate from what we have)
 - [ ] **variable selection**: we already have the interpret_output function but we aren't saving output yet => Save!!
-- [ ] remove MAPE !!
+- [x] remove MAPE !!
 
 ### CV PIPELINE
 - [x] Get up and running!!
@@ -49,16 +49,18 @@
 ### ABLATION
 - [ ] Perform proper study
   - [ ] Include **different horizons** systematically: pipeline accomodates this, ablation code not yet
+  - [ ] see preformance in sample and out of sample!!
+  - [ ] add rRMSE to ablation
 
 ### FINAL Model
-- [ ] apply best hyperparams
+- [x] apply best hyperparams
 - [ ] use it on holdout 
 
 ### Hyperparam tuning 
-- [ ] inspect pkl files (via notebook)
-- [ ] change hyperparam tuning -> per target, per horizon!!
-- [ ] use only context-attention, not attention only !!
-- [ ] horizons: [3,6,12]
+- [x] inspect pkl files (via notebook)
+- [x] change hyperparam tuning -> per target, per horizon!!
+- [x] use only context-attention, not attention only !!
+- [x] horizons: [3,6,12]
 
 ### Presentation
 - [ ] add figures (i.e. ablation studies, hyperparam tables)
