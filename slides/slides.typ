@@ -89,25 +89,22 @@
     [AR(p)],[$display(y_t = c + sum_(i=1)^p phi_i y_(t-i) + epsilon_t)$],
 
   // show arima only below?
-    only("2-")[    
-      #v(2em)
-      ARIMA(p, d, q)
-    ],
-    only("2-")[
-        #v(2em)
-        $display(
-        #text(fill: hi-int)[$Delta^d$] 
-        y_t = c
-        + sum_(i=1)^p phi_i thin 
-        #text(fill: hi-int)[$Delta^d$]
-         y_(t-i)
-        + #text(fill: hi-ma)[$sum_(j=1)^q theta_j epsilon_(t-j)$]
-        + epsilon_t
-      )$
+  [#v(2em)
+  ARIMA(p, d, q)
+  ],
+  [
+    #v(2em)
+    $display(
+    #text(fill: hi-int)[$Delta^d$] 
+    y_t = c
+    + sum_(i=1)^p phi_i thin 
+    #text(fill: hi-int)[$Delta^d$]
+      y_(t-i)
+    + #text(fill: hi-ma)[$sum_(j=1)^q theta_j epsilon_(t-j)$]
+    + epsilon_t
+  )$
     ],
   )
-
-  #only("2-")[
     #v(2em)
     #text(size: 0.82em)[
       #box(fill: hi-int, width: 0.7em, height: 0.7em, radius: 0.1em)
@@ -116,11 +113,10 @@
       #box(fill: hi-ma, width: 0.7em, height: 0.7em, radius: 0.1em)
       #h(0.2em) MA component: $q$ lags of residuals $epsilon_t$
     ]
-  ]
 ]
 
 #slide[
-  = Temporal Fusion Transformers
+  = Temporal Fusion Transformer
   // Add Abbildung from TFT paper here maybe?; then explain it, also saying what variables we use for the static covariates etc; in appendix, list what the actual variables are?
   // if I use AR(IMA) equation, should i use TFT equations too?
     #place(center)[
@@ -407,4 +403,10 @@ typst#slide[
 
   where W refers to the speech window size and n to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold.
 
+]
+
+#slide[
+  = Results: In-Sample
+  - visually
+  - table 
 ]
