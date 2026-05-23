@@ -52,12 +52,9 @@ def _setup_wandb() -> None:
 def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: int) -> tuple[dict, dict, str | None]:
     """Load best params saved by hyperparameter tuning.
 
-    If embedding is None, scans out/tuning/{target}/ for *_h{horizon} dirs and
-    auto-selects the one with the lowest _best_mae (vs macro_only baseline).
-
-    Returns (arch_params, emb_params, resolved_embedding) — params filtered of '_' keys.
-    arch_params: from macro_only_h{horizon}/best_params.json
-    emb_params:  from {embedding}_h{horizon}/best_params.json (empty if no embedding wins)
+    Returns (arch_params, emb_params, embedding) — params filtered of '_' keys.
+    arch_params: always from macro_only_h{horizon}/best_params.json (target-specific TFT arch)
+    emb_params:  from {embedding}_h{horizon}/best_params.json, or {} if embedding is None
     """
     tuning_dir = root / "out" / "tuning" / target
     suffix     = f"_h{horizon}"
@@ -71,21 +68,8 @@ def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: 
     def _strip_private(d: dict) -> dict:
         return {k: v for k, v in d.items() if not k.startswith("_")}
 
-    # auto-detect best embedding when not explicitly provided
-    if embedding is None:
-        macro_raw = _read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json")
-        best_mae  = macro_raw.get("_best_mae", float("inf"))
-        best_emb  = None
-        for d in sorted(tuning_dir.iterdir()):  # sorted for determinism
-            if d.is_dir() and d.name.endswith(suffix) and not d.name.startswith("macro_only"):
-                raw = _read_raw(d / "best_params.json")
-                if raw.get("_best_mae", float("inf")) < best_mae:
-                    best_mae = raw["_best_mae"]
-                    best_emb = d.name[: -len(suffix)]  # strip _h{horizon} suffix
-        embedding = best_emb
-        label = f"'{embedding}' (MAE={best_mae:.6f})" if embedding else f"macro-only (MAE={best_mae:.6f})"
-        print(f"  [tuned] auto-selected: {label}")
-
+    # if embedding is None: macro-only mode — arch params from macro_only dir, no emb_params
+    # (auto-detection of best embedding belongs in the tuning stage, not here)
     arch_params = _strip_private(_read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json"))
     emb_params  = _strip_private(_read_raw(tuning_dir / f"{embedding}{suffix}" / "best_params.json")) if embedding else {}
     return arch_params, emb_params, embedding
@@ -99,8 +83,8 @@ def compute_metrics(df: pd.DataFrame) -> dict:
     rmse = float(np.sqrt(np.mean(errors ** 2)))
 
     # Relative RMSE (divide RMSE by std of actuals)
-    std_actual = np.std(df["actual"].values)
-    rel_rmse = float(rmse / std_actual) if std_actual > 0 else np.nan
+    # std_actual = np.std(df["actual"].values)
+    # rel_rmse = float(rmse / std_actual) if std_actual > 0 else np.nan
 
     # Quantile loss (if quantiles available)
     quantile_loss = np.nan
@@ -122,22 +106,25 @@ def compute_metrics(df: pd.DataFrame) -> dict:
         # raw
         "MAE": mae,           
         "RMSE": rmse,
-        "rel_RMSE": rel_rmse,
+        # "rel_RMSE": rel_rmse,
         "QuantileLoss": quantile_loss if not np.isnan(quantile_loss) else np.nan,
         # rounded versions for display
         "MAE_display": round(mae, 5),
         "RMSE_display": round(rmse, 5),
-        "rel_RMSE_display": round(rel_rmse, 5),
+        # "rel_RMSE_display": round(rel_rmse, 5),
         "QuantileLoss_display": round(quantile_loss, 5) if not np.isnan(quantile_loss) else np.nan,
     }
 
 
 # ── save ─────────────────────────────────────────────────────────────────────
 
-def save_results(results: dict, out_dir: Path, run_name="default", embedding="none", aggregation="mean") -> pd.DataFrame:
-    """Save per-fold CSVs + per-fold metrics + fold-averaged metrics."""
+def save_results(results: dict, out_dir: Path, run_name="default", embedding="none", aggregation="mean", ablation_mode=False, horizon: int = 12) -> pd.DataFrame:
+    """Save per-fold CSVs + per-fold metrics + fold-averaged metrics.
+
+    ablation_mode=True  → append to out/holdout/experiments.csv (multi-run comparison)
+    ablation_mode=False → overwrite out/holdout/{run_name}/metrics_h{horizon}_{embedding}.csv
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-    # allow to save results from different runs
     run_dir = out_dir / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     
@@ -149,18 +136,22 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
                 m = compute_metrics(df)
                 rows.append({"model": model, "fold": fold, "target": target, **m})
 
-    metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE_display", "RMSE_display", "rel_RMSE_display", "QuantileLoss_display"] if c in pd.DataFrame(rows).columns]]
+    metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE_display", "RMSE_display", 
+                                                #  "rel_RMSE_display", 
+                                                 "QuantileLoss_display"] if c in pd.DataFrame(rows).columns]]
     metrics_df = metrics_df.sort_values(by=["target", "model", "fold"]).reset_index(drop=True)
     metrics_df = metrics_df.rename(columns={
         "MAE_display": "MAE",
         "RMSE_display": "RMSE", 
-        "rel_RMSE_display": "rel_RMSE",
+        # "rel_RMSE_display": "rel_RMSE",
         "QuantileLoss_display": "QuantileLoss"
     })
     metrics_df.to_csv(run_dir  / "metrics_per_fold.csv", index=False)
 
     avg_df = (
-        metrics_df.groupby(["model", "target"])[[c for c in ["MAE", "RMSE", "rel_RMSE", "QuantileLoss"] if c in metrics_df.columns]]
+        metrics_df.groupby(["model", "target"])[[c for c in ["MAE", "RMSE",
+                                                            #   "rel_RMSE", 
+                                                              "QuantileLoss"] if c in metrics_df.columns]]
         .mean().round(5).reset_index()
         .sort_values(by=["target", "model"]).reset_index(drop=True)
     )
@@ -170,9 +161,16 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
     avg_df["aggregation"] = aggregation
     avg_df["timestamp"]   = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
     
-    master_path = out_dir / "experiments.csv"
-    
-    avg_df.to_csv(master_path, mode="a", header=not master_path.exists(), index=False)
+    if ablation_mode:
+        # ablation run: append to shared experiments.csv for multi-run comparison
+        master_path = out_dir / "experiments.csv"
+        avg_df.to_csv(master_path, mode="a", header=not master_path.exists(), index=False)
+    else:
+        # standalone run: overwrite per-run metrics file (clean slate each time)
+        emb_tag = embedding if embedding != "none" else "macro"
+        metrics_path = run_dir / f"metrics_h{horizon}_{emb_tag}.csv"
+        avg_df.to_csv(metrics_path, index=False)
+        print(f"Metrics saved → {metrics_path}")
 
     print("\n=== Evaluation Metrics (per fold) ===")
     print(metrics_df.to_string(index=False))
@@ -183,7 +181,7 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
 
 # ── plot ──────────────────────────────────────────────────────────────────────
 
-def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
+def plot_results(results: dict, out_dir: Path, run_name: str = "default", horizon: int = 12, embedding: str | None = None):
     # collect all targets across all folds
     targets = sorted({t for fold_res in results.values() for tr in fold_res.values() for t in tr})
     _, axes = plt.subplots(len(targets), 1, figsize=(14, 4 * len(targets)), squeeze=False)
@@ -207,16 +205,16 @@ def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
                         color="black", linewidth=1.5, label="Actual")
                 actual_drawn = True
 
-                ax.plot(df["date"], df["predicted"],
-                    color=colors.get(model, "orange"),
-                    linewidth=1.5,
-                    linestyle=linestyles.get(model, "-"),
-                    label=f"{model} Predicted")
+            ax.plot(df["date"], df["predicted"],
+                color=colors.get(model, "orange"),
+                linewidth=1.5,
+                linestyle=linestyles.get(model, "-"),
+                label=f"{model} Predicted")
 
-                # Add prediction interval fill for TFT quantiles if available
-                if model == "TFT" and "pred_lo" in df.columns and "pred_hi" in df.columns:
-                    ax.fill_between(df["date"], df["pred_lo"], df["pred_hi"],
-                        color=colors["TFT"], alpha=0.15, label="TFT 10–90% PI")
+            # Add prediction interval fill for TFT quantiles if available
+            if model == "TFT" and "pred_lo" in df.columns and "pred_hi" in df.columns:
+                ax.fill_between(df["date"], df["pred_lo"], df["pred_hi"],
+                    color=colors["TFT"], alpha=0.15, label="TFT 10–90% PI")
 
         ax.set_title(f"{target}: Predicted vs Actual")
         ax.set_xlabel("Date")
@@ -226,7 +224,8 @@ def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
     plt.tight_layout()
     run_dir = out_dir / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
-    path = run_dir / "predictions_vs_actuals.png"
+    emb_tag = embedding if embedding else "macro"
+    path = run_dir / f"predictions_vs_actuals_h{horizon}_{emb_tag}.png"
     plt.savefig(path, bbox_inches="tight", dpi=150)
     plt.close()
     print(f"Plot saved → {path}")
@@ -291,6 +290,10 @@ def main():
         help="Unique name for this run (used for output subfolder)",
     )
 
+    parser.add_argument(
+        "--ablation-mode", action="store_true", default=False,
+        help="Append results to experiments.csv (multi-run); default overwrites per-run metrics.csv",
+    )
     parser.add_argument(
         "--tuned", action="store_true", default=False,
         help=(
@@ -452,13 +455,16 @@ def main():
             print(f"  → {len(tft_df)} predictions")
 
     # ── 3. save predictions vs. actuals, calculate eval metrics ──────────────
-    save_results(results, out_dir, 
+    save_results(results, out_dir,
              run_name=args.run_name,
              embedding=args.embedding or "none",
-             aggregation=args.aggregation)
+             aggregation=args.aggregation,
+             ablation_mode=args.ablation_mode,
+             horizon=args.horizon)
 
     # ── 4. plot results ───────────────────────────────────────────────────────
-    plot_results(results, out_dir, run_name=args.run_name)
+    plot_results(results, out_dir, run_name=args.run_name,
+                 horizon=args.horizon, embedding=args.embedding)
 
 
 if __name__ == "__main__":

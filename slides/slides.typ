@@ -1,5 +1,6 @@
 #import "template.typ": *
 #import "figures/data_timeline.typ": data-timeline
+#import "figures/metrics_table.typ": metrics-table
 
 #show: presentation
 #set par(leading: 1.2em)
@@ -174,23 +175,19 @@
 
 
 #slide[
+  // TODO: use hyperparam tuning grid, put it into main part of presentation
   = Hyperparameter Tuning
   Tune in two stages:
   + *Stage 1: Architecture (Macro-Only TFT)*
     - Bayesian search via Optuna (TPE sampler)
     - 2-fold CV, up to 50 trials
     - Includes: encoder length, hidden size, normalizer
-  // MOVE THIS TO APPENDIX
-  // - Search space:
-  // - Encoder length: 12–48
-  // - Hidden size: \{8, 16, 32, 64, 128, 256\}
-  // - Dropout: 0.05–0.55
-  // - Learning rate: $10^(-4)$–$0.15$ (log scale)
-  // - Normalizer: \{encoder-none, group\}
   + *Stage 2: Speech Embedding Params*
     - Architecture fixed from Stage 1
     - Tune: aggregation, reduction, PCA dims, speech window
 ]
+
+
 
 #slide[
   = Evaluation Protocol
@@ -406,7 +403,46 @@ typst#slide[
 ]
 
 #slide[
-  = Results: In-Sample
-  - visually
-  - table 
+  #v(1fr)
+  #align(center)[= Results: In Sample]
+  #v(1fr)
+]
+
+#slide[
+  = Macro Only: h=12 
+  #speaker-notes[
+    ran with `python src/holdout-validation/e_main.py --tuned --wandb --horizon 12` 
+    - h=12
+    - macro only
+    - HP tuned architecture:
+    - targets: all
+  ]
+  #only("1")[
+    #place(center)[
+    #image("../out/holdout/default/predictions_vs_actuals_h12_macro.png")
+  ]
+  ]
+  #only("2")[
+    #v(3em)
+    #place(center)[
+    #metrics-table(path: "../../out/holdout/default/metrics_h12_macro.csv")
+    ]
+  ]
+
+]
+#slide[
+  = with Embeddings: h=12 
+  #speaker-notes[
+    ran with `python src/holdout-validation/e_main.py --tuned --wandb --horizon 12` 
+    - h=12
+    - with embeddings
+    - HP tuned architecture + embeddings:
+    - targets: all
+  ]
+  #only("1")[
+    plot
+  ]
+  #only("2")[
+    metrics
+  ]
 ]

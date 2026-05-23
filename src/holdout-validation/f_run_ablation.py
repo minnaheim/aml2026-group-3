@@ -110,7 +110,8 @@ def main():
             "--horizon",    str(args.horizon),
             "--run-name",   run_name,
             "--aggregation", exp["aggregation"],
-            "--tuned",       # always use tuned hyperparameters
+            "--tuned",         # always use tuned hyperparameters
+            "--ablation-mode", # append to experiments.csv instead of overwriting metrics.csv
         ]
         if exp["embedding"]:
             cmd += ["--embedding", exp["embedding"]]
