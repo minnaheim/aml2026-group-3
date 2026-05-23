@@ -1,0 +1,13 @@
+{
+  "max_encoder_length": 37,
+  "hidden_size": 16,
+  "hidden_continuous_size": 4,
+  "lstm_layers": 16,
+  "dropout": 0.39664911027621375,
+  "learning_rate": 0.08989441105029856,
+  "normalizer": "group",
+  "_best_mae": 0.001505,
+  "_n_trials": 40,
+  "_total_minutes": 73.9,
+  "_minutes_per_trial": 1.8
+}

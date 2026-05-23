@@ -1,0 +1,13 @@
+{
+  "max_prediction_length": 6,
+  "max_encoder_length": 45,
+  "speech_window_months": 5,
+  "n_pca": 22,
+  "hidden_size": 64,
+  "hidden_continuous_size": 8,
+  "lstm_layers": 4,
+  "dropout": 0.08097237571817183,
+  "learning_rate": 0.0003872118032174585,
+  "normalizer": "group",
+  "_best_mae": 1.727195
+}

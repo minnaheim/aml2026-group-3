@@ -9,7 +9,7 @@ import lightning.pytorch as pl
 import matplotlib as plt
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import EncoderNormalizer # switched from group normalizer
-from pytorch_forecasting.metrics import SMAPE
+from pytorch_forecasting.metrics import SMAPE, QuantileLoss
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 
 warnings.filterwarnings("ignore")
@@ -24,16 +24,24 @@ LAG_PERIODS = [1, 2, 6, 12]
 #ANNA# LOG_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"}
 
 
-class TFTRunner:
-    # hyperparams matching initial tryout at  tft-macro.ipynb
-    # UPDATED: Change from days to months
-    MAX_ENCODER_LENGTH = 24 # 2-year monthly lookback
-    MAX_PREDICTION_LENGTH = 12 # 12-month forecast horizon
-    PATIENCE = 15
-    MAX_EPOCHS = 50
-    LEARNING_RATE = 0.03
+HPARAMS_DEFAULTS = {
+    "max_encoder_length":     24,
+    "max_prediction_length":  12,
+    "min_encoder_length":     8,
+    "patience":               15,
+    "max_epochs":             50,
+    "learning_rate":          0.03,
+    "lstm_layers":            2,
+    "hidden_size":            64,
+    "attention_head_size":    2,
+    "hidden_continuous_size": 8,
+    "dropout":                0.2,
+    "normalizer":             "encoder_none",  # "encoder_none" | "group"
+}
 
-    def __init__(self, dfb):
+class TFTRunner:
+    QUANTILES = [0.05, 0.1, 0.5, 0.9, 0.95] # forecast quantiles for TFT
+    def __init__(self, dfb, hparams: dict | None = None):
         """
         Parameters
         ----------
@@ -42,8 +50,14 @@ class TFTRunner:
             dfb.pca_cols will be non-empty and those columns will automatically
             be included as time-varying unknown reals.  Otherwise the runner
             operates in macro-only mode.
+        hparams : dict, optional
+            Override any key from HPARAMS_DEFAULTS.
         """
         self.dfb = dfb
+        self.hparams = {**HPARAMS_DEFAULTS, **(hparams or {})}
+        # convenience aliases (read-only shortcuts used in predict())
+        self.MAX_ENCODER_LENGTH    = self.hparams["max_encoder_length"]
+        self.MAX_PREDICTION_LENGTH = self.hparams["max_prediction_length"]
 
     def _add_tft_vars(self, df: pd.DataFrame, target: str) -> pd.DataFrame:
         """Add series_id, time_idx, calendar features, monthly lags, and target metadata."""
@@ -137,21 +151,30 @@ class TFTRunner:
          # so val_loss reflects out-of-sample fit within the training period                                                                                                                                                                           
         fit_df = train_df.iloc[:-self.MAX_PREDICTION_LENGTH]           
 
+        # select normalizer based on hparam
+        if self.hparams["normalizer"] == "group":
+            from pytorch_forecasting.data import GroupNormalizer
+            normalizer = GroupNormalizer(groups=["series_id"])
+        elif self.hparams["normalizer"] == "encoder_softplus":
+            normalizer = EncoderNormalizer(transformation="softplus")
+        else:
+            normalizer = EncoderNormalizer(transformation=None) 
+
         training = TimeSeriesDataSet(
             data=fit_df,
-            # data=train_df,
             time_idx='time_idx',
             target=target,
             group_ids=['series_id'],
-            max_encoder_length=self.MAX_ENCODER_LENGTH,
-            max_prediction_length=self.MAX_PREDICTION_LENGTH,
+            max_encoder_length=self.hparams["max_encoder_length"],
+            min_encoder_length=self.hparams["min_encoder_length"],
+            max_prediction_length=self.hparams["max_prediction_length"],
             static_categoricals=['series_id'] + meta_cat_cols,
             static_reals=meta_real_cols,
             time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday',
                                       # fomc dates known in advance — only included with speeches
                                       *fomc_known_present],
             time_varying_unknown_reals=[*covariates, *lag_cols, *pca_cols_present, *dissent_cols_present],
-            target_normalizer=EncoderNormalizer(transformation=None), # cannot use softplus anymrore since log diff can be negative; None since data SHOULD be mean reverting
+            target_normalizer=normalizer,
             add_relative_time_idx=True,
             add_target_scales=True,
             add_encoder_length=True,
@@ -165,12 +188,13 @@ class TFTRunner:
         return training, train_dl, val_dl
 
     def train_tft(self, training_ds, train_dl, val_dl,
-                  use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu'):
+                  use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu',
+                  run_name: str = 'tft-holdout'):
         """Build trainer + TFT, fit, return best checkpoint path."""
         callbacks = [
             # changed this to val_loss -> train-loss will usually increase, even if val_loss stops
             EarlyStopping(monitor='val_loss',
-                          patience=self.PATIENCE, verbose=False, mode='min'),
+                          patience=self.hparams["patience"], verbose=False, mode='min'),
         ]
         if use_wandb:
             callbacks.append(LearningRateMonitor())
@@ -180,16 +204,17 @@ class TFTRunner:
 
         logger = False
         if use_wandb:
+            import wandb
             from lightning.pytorch.loggers import WandbLogger
-            logger = WandbLogger(project='tft', name='tft-holdout')
+            logger = WandbLogger(project='tft', name=run_name)
+            print(f"  W&B run: {logger.experiment.url}")
 
         accelerator = device if device in ('cuda', 'mps') else 'cpu'
         trainer = pl.Trainer(
-            max_epochs=self.MAX_EPOCHS,
+            max_epochs=self.hparams["max_epochs"],
             accelerator=accelerator,
             devices=1,
             gradient_clip_val=0.25,
-            # limit_train_batches=60,
             callbacks=callbacks,
             enable_model_summary=True,
             logger=logger,
@@ -197,14 +222,14 @@ class TFTRunner:
 
         tft = TemporalFusionTransformer.from_dataset(
             training_ds,
-            learning_rate=self.LEARNING_RATE,
-            lstm_layers=4, # before was 2
-            hidden_size=64, # before this was 16
-            attention_head_size=2,
-            dropout=0.2,
-            hidden_continuous_size=8,
-            output_size=1,
-            loss=SMAPE(),
+            learning_rate=self.hparams["learning_rate"],
+            lstm_layers=self.hparams["lstm_layers"],
+            hidden_size=self.hparams["hidden_size"],
+            attention_head_size=self.hparams["attention_head_size"],
+            dropout=self.hparams["dropout"],
+            hidden_continuous_size=self.hparams["hidden_continuous_size"],
+            output_size=len(self.QUANTILES),
+            loss=QuantileLoss(quantiles=self.QUANTILES),
             log_interval=10,
             reduce_on_plateau_patience=4,
         )
@@ -266,7 +291,8 @@ class TFTRunner:
         return importance_dfs
 
     def run(self, splits, target: str, fold: int = 0, batch_size: int = 128,
-            use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu') -> str:
+            use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu',
+            run_name: str = 'tft-holdout') -> str:
         """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
         self._train_raw = self.dfb.get_data(splits, train=True, model='TFT', fold=fold)
         print("Got data from data_frame_builder...")
@@ -276,7 +302,7 @@ class TFTRunner:
 
         self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
         print("Created TimeSeriesDataSet for tft...")
-        return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device)
+        return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device, run_name)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
                 batch_size: int = 128, device: str = 'cpu', step: int | None = None) -> pd.DataFrame:
@@ -332,7 +358,7 @@ class TFTRunner:
             )
             pred_dl = pred_ds.to_dataloader(train=False, batch_size=batch_size, num_workers=0)
 
-            raw_preds = model.predict(pred_dl)          # (1, MAX_PREDICTION_LENGTH)
+            raw_preds = model.predict(pred_dl, mode="quantiles")  # (1, MAX_PREDICTION_LENGTH)
             if raw_preds.ndim == 3:
                 raw_preds = raw_preds.squeeze(1)
             preds_np = raw_preds.detach().cpu().numpy()
@@ -343,7 +369,7 @@ class TFTRunner:
 
             for i in range(window_size):
                 row  = test_window.iloc[i]
-                pred = float(preds_np[0, pred_offset + i])
+                pred = float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.5)]) # median quantile is used for prediction  
                 #ANNA # reverse the logging from before
                 # if target in LOG_TARGETS:
                 #     pred = np.exp(pred)
@@ -352,7 +378,9 @@ class TFTRunner:
                 all_rows.append({
                     "date":      row["date"],
                     "actual":    float(row[target]),  # test_raw is original scale
-                    "predicted": pred,
+                    "predicted": float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.5)]),   # q0.5
+                    "pred_lo":   float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.1)]),   # q0.1
+                    "pred_hi":   float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.9)]),   # q0.9
                     "target":    target,
                 })
 
@@ -361,7 +389,7 @@ class TFTRunner:
         result_df = (
             result_df.set_index("date")
                      .resample(freq).first()
-                     .dropna(subset=["actual", "predicted"])
+                     .dropna(subset=["actual", "predicted", "pred_lo", "pred_hi"])  # drop any rows where actual or predicted is NaN
                      .reset_index()
         )
         result_df["target"] = target

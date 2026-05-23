@@ -14,12 +14,12 @@ src/lightning_logs
 checkpoints
 wandb
 
+out/
 **/*lightning_logs
 
 lightning_logs/
 __pycache__/
 *.pyc
-out/
 
 # also don't commit data files unzipped
 data/cleaned_speeches.csv

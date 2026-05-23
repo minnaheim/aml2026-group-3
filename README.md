@@ -33,6 +33,7 @@ Below you will find a project overview of the most important files.
 │   │   ├── d_tft_runner.py             # TFT runner (PyTorch Forecasting)
 │   │   ├── e_main.py                   # orchestrates all runners, logs to W&B, saves outputs
 │   │   ├── f_run_ablation.py           # ablation study runner
+│   │   ├── g_tune_hyperparams.py       # Bayesian HP tuning (Optuna/TPE), per-target
 │   │   └── plot_experiments.py         # plotting utilities for experiment results
 │   └── notebooks/                      # exploratory notebooks and scripts (not part of main pipeline)
 ```
@@ -80,9 +81,32 @@ Specific runs only:
 python src/holdout-validation/f_run_ablation.py --runs macro_only fomc_roberta_mean --device cuda
 ```
 
+---
 
-## Rendering the Slides
+## Hyperparameter tuning (Bayesian / Optuna)
 
-```bash 
+<!-- Quick smoke test (3 trials):
+```bash
+python src/holdout-validation/g_tune_hyperparams.py --target CPI --n-trials 3 --device cuda
+``` -->
+
+**Observed runtime (Renku, CUDA):** ~5.5 min for 3 trials → ~1.8 min/trial. Full 50-trial sweep ≈ 1.5 h per target.
+
+Best params are saved to `out/tuning/{target}/{run_tag}/best_params.json`. The study is checkpointed to `out/tuning/{target}/{run_tag}/optuna_study.pkl` and resumes automatically if re-run. `run_tag` is `macro_only` or `{embedding}_{aggregation}_{reduction}`.
+
+---
+
+### Stage 2 HP Runs:
+
+```bash
+# Stage 2 — speech embedding tuning (single target/horizon)
+python src/holdout-validation/g_tune_hyperparams.py --target CPI --embedding fomc-roberta --n-trials 20 --horizon 12 --device cuda
+
+# Stage 2 — all targets x horizons in sequence
+# RUN ENTIRE STAGE 2 WITH FOMC-ROBERTA
+python src/holdout-validation/g_tune_hyperparams.py --embedding fomc-roberta --n-trials 20 --all --device cuda
+
+# RUN ENTIRE STAGE 2 WITH FINBERT
+python src/holdout-validation/g_tune_hyperparams.py --embedding finbert --n-trials 20 --all --device cuda
 
 ```

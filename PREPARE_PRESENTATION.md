@@ -132,70 +132,64 @@ Bringing it all together
 
 # Hyperparameter Tuning:
 
-After discussing the topic with David, he told us to fix all of the hyperparams we can think of today, and we could do the following hyperparam strategies:
+After discussing the topic with David, he told us to fix all of the hyperparams we can think of today, and use bayesian optimisation. 
 
-1. define a **bayesian optimisation** approch using `optuna`
+We want to train our **two TFT models**:
 
-2. define grid where the possible hyperparams are set, then sweep them, to hyperparam tuning.
+-> TFT without speech embeddings (serves as our ML-benchmark)
 
+-> TFT with speech embeddings
 
-Hence, these are the Hyperparams we define today:
+to predict these two categories:
+ 
+1. Targets ["CPI", "GDP", "UNRATE"]
+2. Horizons [3, 6, 12]
 
+Meaning, when it comes to hyperparameter tuning, we need to tune the following hyperparameters for these 12 model combinations, i.e.:
+
+1. TFT Macro on CPI with horizon=3 
+2. TFT with Speech Embeddings on CPI with horizon=3 
+3. TFT Macro on CPI with horizon=6
+etc. 
 
 ## Defining our Hyperparams we want to tune: 
 
-**IMPORTANT:** these hyperparams need to be re-tuned for each target. these are different approaches, and thus require different solutions -> different hyperparams.
+We defined out hyperparameter tuning strategy to work in two steps:
 
-When constructing the hyperparam grid, distinguish two classes:
-- **Problem-meaningful** (grid): values with a natural, interpretable range — e.g. forecast horizon (1, 3, 6, 12 months), speech window (3, 6, 12 months), lag periods.
-- **Statistical / arbitrary** (log-uniform or wide range): learning rate, hidden sizes, dropout, etc.
+1. First, we tune all of the non-context relevant paramters, then fix those
+2. Second, train the econ-specific context-parameters (embedding params)
 
-### (A) Data & Feature Params ← *problem-meaningful grid*
 
-- `max_prediction_length` — **forecast horizon**, e.g. {1, 6, 12} months; must match AR/ARIMA for comparability
-- `max_encoder_length` — context window, e.g. {12, 24, 36} months (currently 24)
-- `min_encoder_length` — lower bound on encoder, e.g. {8, 12}
-- `SPEECH_WINDOW_MONTHS` — rolling look-back for speech aggregation, e.g. {3, 6, 12} (**Anna flagged this as important!**)
-- `N_PCA` — PCA components per speech, e.g. {10, 20, 30} (currently 20; embedding_manager uses 5)
-<!-- - lag periods — which lags to include, e.g. subsets of {1, 2, 6, 12} -->
-- **embedding type**:
-    - FinBERT (truncated CLS / chunk-mean)
-    - FOMC-RoBERTa (truncated CLS / chunk-mean)
-    - no embeddings (macro-only baseline)
+### First Part of HP Tuning:
+
+- `max_encoder_length` — context window, e.g. [12-48] months
+- `lstm_layers` — {1, 2, 4} (currently 4; was 2)
+- `hidden_size` — {16, 32, 64, 128, 256} 
+- `hidden_continuous_size` — {2, 4, 8, 16}
+- `dropout` — between [0.05, 0.55] 
+- `learning_rate` — between [1e-4, 0.1]
+- `batch_size` — {16, 32, 64, 128} (currently 128 val, 16 train)
+- `max_epochs` — fixed at 50 (tuned via early stopping, not a sweep param)
 - **normalizer** (per target, since series differ in scale/stationarity):
     - `EncoderNormalizer(transformation="None")`  — no transform (after getting new macro data)  
     - `GroupNormalizer` — global scaling across the group; tested before, currently dropped
 
-### (B) TFT Architecture Params ← *log-uniform / wide range*
+### Second Part of HP Tuning 
 
-- `lstm_layers` — {1, 2, 4} (currently 4; was 2)
-- `hidden_size` — {16, 32, 64, 128} (currently 64; was 16)
-- `attention_head_size` — {1, 2, 4} (currently 2)
-- `hidden_continuous_size` — {8, 16, 32} (currently 8; basic.py uses 32)
-- `dropout` — uniform in [0.05, 0.4] (currently 0.2)
+- `SPEECH_WINDOW_MONTHS` — rolling look-back for speech aggregation, e.g. [3-12] 
+- `N_PCA` between [5,30]
+- **embedding type**:
+    - FinBERT (chunk-mean)
+    - FOMC-RoBERTa (chunk-mean)
+- **dimensionality reduction of speeches**:
+     - (Speech Embeddings as is (no dim reduction))
+     — PCA components per speech `N_PCA`, e.g. [5-30] 
+     - Factor Analysis also `N_PCA`(just use same factor)
+- **embedding aggregator**:
+    - mean 
+    - (exponential) decay
+    - attention-context-based
 
-### (C) Training / Optimisation Params ← *log-uniform*
-
-- `learning_rate` — log-uniform in [1e-4, 0.1] (currently 0.03)
-- `batch_size` — {16, 32, 64, 128} (currently 128 val, 16 train)
-- `max_epochs` — fixed at 50 (tuned via early stopping, not a sweep param)
-
-
-<!-- We use the `pytorch-forecasting` implementation of the TFT with the following hyperparameters:
-
-| Parameter | Value | Rationale |
-|---|---|---|
-| `max_encoder_length` | 24 months | 2-year context window |
-| `max_prediction_length` | 12 months | 1-year forecast horizon, matching AR/ARIMA |
-| `lstm_layers` | 4 | deeper sequence encoding |
-| `hidden_size` | 64 | main model width |
-| `attention_head_size` | 2 | multi-head self-attention in decoder |
-| `dropout` | 0.2 | regularisation |
-| `hidden_continuous_size` | 8 | embedding width for continuous variables |
-| `output_size` | 1 | point forecast |
-| `loss` | SMAPE | scale-independent, comparable across targets |
-| `learning_rate` | 0.03 | |
-| `gradient_clip_val` | 0.25 | prevents exploding gradients | -->
 
 ## Evaluation Protocol
 

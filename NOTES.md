@@ -58,6 +58,19 @@
 - [ ] Perform proper study
   - [ ] Include **different horizons** systematically: pipeline accomodates this, ablation code not yet
 
+### FINAL Model
+- [ ] apply best hyperparams
+- [ ] use it on holdout 
+
+### Hyperparam tuning 
+- [ ] inspect pkl files (via notebook)
+- [ ] change hyperparam tuning -> per target, per horizon!!
+- [ ] use only context-attention, not attention only !!
+- [ ] horizons: [3,6,12]
+
+### Presentation
+- [ ] add figures (i.e. ablation studies, hyperparam tables)
+
 ## Decisions
 ### Data Sources
 - Merge speaker metadata to clenaed speeches: metadata only covers FRB presidents and Board members, speeches also included from deputy presidents and senior staff. We keep these speeches for now, check later if the information content maybe different.

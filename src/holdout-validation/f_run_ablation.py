@@ -73,6 +73,8 @@ def main():
     parser.add_argument("--targets", nargs="+", default=["CPI", "UNRATE", "GDP"])
     parser.add_argument("--horizon", type=int, default=12)
     parser.add_argument("--no-baselines", action="store_true", default=False)
+    parser.add_argument("--wandb",        action="store_true", default=False,
+                        help="Enable W&B logging for each TFT run")
     parser.add_argument(
         "--runs", nargs="+", default=None,
         help="Only run specific experiments by run_name (default: all)"
@@ -110,8 +112,11 @@ def main():
             cmd += ["--embedding", exp["embedding"]]
         if args.no_baselines:
             cmd += ["--no-baselines"]
+        if args.wandb:
+            cmd += ["--wandb"]
 
         print(f"Command: {' '.join(cmd)}\n")
+        # can i
         result = subprocess.run(cmd)
         
         if result.returncode != 0:
