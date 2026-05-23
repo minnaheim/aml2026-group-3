@@ -448,9 +448,14 @@ typst#slide[
     - targets: all
   ]
   #only("1")[
-    plot
+    #place(center)[
+    #image("../out/holdout/default/predictions_vs_actuals_h12_auto.png")
+  ]
   ]
   #only("2")[
-    metrics
+    #v(3em)
+    #place(center)[
+    #metrics-table(path: "../../out/holdout/default/metrics_h12_auto.csv")
+    ]
   ]
 ]

@@ -340,9 +340,9 @@ def main():
     
     args = parser.parse_args()
 
-    # make sure that there is no sneaky cuda being used 
-    if args.device != "cuda":                                                                                                                                            
-          os.environ["CUDA_VISIBLE_DEVICES"] = ""   
+    # make sure that there is no sneaky cuda being used
+    if args.device != "cuda":
+          os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     root    = Path(__file__).parent.parent.parent
     out_dir = root / "out" / "holdout"
@@ -350,34 +350,19 @@ def main():
     if args.wandb:
         _setup_wandb()
 
-    # ── apply tuned embedding params (from first target) before data loading ──
-    # embedding type is auto-detected from best_mae if not explicitly given
-    if args.tuned:
-        _, emb_params, resolved_emb = load_tuned_hparams(
-            root, args.targets[0], args.embedding, args.horizon
-        )
-        args.embedding = resolved_emb  # may stay None (macro-only wins) or be auto-set
-        if emb_params:
-            args.aggregation   = emb_params.get("aggregation",          args.aggregation)
-            args.reduction     = emb_params.get("reduction",            args.reduction)
-            args.n_pca         = emb_params.get("n_pca",                args.n_pca)
-            args.speech_window = emb_params.get("speech_window_months", args.speech_window)
-            print(f"[tuned] embedding params from '{args.targets[0]}': {emb_params}")
-        if len(args.targets) > 1:
-            print(f"[tuned] NOTE: embedding/arch params for first target '{args.targets[0]}' guide data loading")
-
+    emb_tag = args.embedding or "none"
     print(f"Targets   : {args.targets}")
     print(f"Device    : {args.device}")
-    print(f"Embedding : {args.embedding or 'none'}")
+    print(f"Embedding : {emb_tag}{'  (per-target auto-select)' if args.embedding == 'auto' and args.tuned else ''}")
     print(f"Horizon   : {args.horizon}")
     print(f"Tuned     : {args.tuned}")
     print(f"W&B       : {args.wandb}")
     print(f"Output    : {out_dir}\n")
 
-    # ── 1. split the data acc. to data-frame-builder ─────────────────────────
+    # ── 1. build base data (macro + dissents, no embeddings) ─────────────────
     # dissents are loaded explicitly so those features appear in process_data()
     # regardless of whether embeddings are used
-    hparams = {
+    base_hparams = {
         "max_prediction_length":  args.horizon,
         "max_encoder_length":     args.encoder_length,
         "speech_window_months":   args.speech_window,
@@ -392,20 +377,9 @@ def main():
     dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window)
     dfb.load_fomc_dissent()
     df  = dfb.process_data()
-    splits, holdout = dfb.generate_split(df)
+    base_splits, holdout = dfb.generate_split(df)
 
-    if args.embedding is not None: # allow for different models!
-        # re-fit PCA per fold on training speeches only — no look-ahead leakage
-        # NOW: depending on whether we actually call pca or "none" (or factor analysis, to do)
-        emb = EmbeddingManager(
-            str(root), 
-            embedding=args.embedding, 
-            n_pca=args.n_pca,
-            reduction=args.reduction
-        ).load()
-        splits = dfb.add_leakage_free_embeddings(splits, emb)
-
-    for s in splits:
+    for s in base_splits:
         tr, te = s["train"], s["test"]
         print(
             f"Fold {s['fold']}: "
@@ -416,29 +390,61 @@ def main():
         f"Holdout : [{holdout['date'].min().date()} – {holdout['date'].max().date()}] "
         f"({len(holdout)} rows)\n"
     )
-    # initiate baseline runners (stateless between targets)
+
+    # initiate baseline runners (stateless between targets, never need embeddings)
     ar_runner    = ARRunner(dfb,    max_prediction_length=args.horizon)
     arima_runner = ARIMARunner(dfb, max_prediction_length=args.horizon)
 
     # results[model][fold_num][target] = predictions DataFrame
-    results = {"TFT": {s["fold"]: {} for s in splits}}
+    results = {"TFT": {s["fold"]: {} for s in base_splits}}
     if not args.no_baselines:
-        results["AR"]    = {s["fold"]: {} for s in splits}
-        results["ARIMA"] = {s["fold"]: {} for s in splits}
+        results["AR"]    = {s["fold"]: {} for s in base_splits}
+        results["ARIMA"] = {s["fold"]: {} for s in base_splits}
 
     # ── 2. run all models for each target × fold ──────────────────────────────
-    # outer loop over targets so we can load per-target tuned arch hparams once
+    # embeddings are resolved PER TARGET so each target uses its own optimal
+    # embedding type, aggregation, n_pca, and speech_window from tuning
     for target in args.targets:
-        # load per-target tuned architecture hparams if --tuned
         if args.tuned:
-            arch_params, _, _ = load_tuned_hparams(root, target, args.embedding, args.horizon)
-            target_hparams = {**hparams, **arch_params}
-            print(f"\n[tuned] {target} arch params: {arch_params}")
+            arch_params, emb_params, t_embedding = load_tuned_hparams(
+                root, target, args.embedding, args.horizon
+            )
+            t_aggregation   = emb_params.get("aggregation",          args.aggregation)   if emb_params else args.aggregation
+            t_reduction     = emb_params.get("reduction",            args.reduction)     if emb_params else args.reduction
+            t_n_pca         = emb_params.get("n_pca",                args.n_pca)         if emb_params else args.n_pca
+            t_speech_window = emb_params.get("speech_window_months", args.speech_window) if emb_params else args.speech_window
+            target_hparams  = {**base_hparams, **arch_params, "speech_window_months": t_speech_window}
+            print(f"\n[tuned] {target}: embedding={t_embedding}, arch={arch_params}")
+            if emb_params:
+                print(f"[tuned] {target}: emb_params={emb_params}")
         else:
-            target_hparams = hparams
-        tft_runner = TFTRunner(dfb, hparams=target_hparams)
+            t_embedding     = args.embedding
+            t_aggregation   = args.aggregation
+            t_reduction     = args.reduction
+            t_n_pca         = args.n_pca
+            t_speech_window = args.speech_window
+            target_hparams  = base_hparams
 
-        for fold_idx, s in enumerate(splits):
+        # build per-target embedding-augmented splits for TFT
+        # AR/ARIMA always use base_splits (they don't use embedding features)
+        if t_embedding is not None:
+            # re-fit PCA per fold on training speeches only — no look-ahead leakage
+            t_dfb = DataFrameBuilder(str(root), aggregation=t_aggregation, speech_window=t_speech_window)
+            t_dfb.load_fomc_dissent()
+            t_splits, _ = t_dfb.generate_split(df)  # reuse processed df, same split dates
+            emb_mgr  = EmbeddingManager(
+                str(root), embedding=t_embedding, n_pca=t_n_pca, reduction=t_reduction
+            ).load()
+            t_splits = t_dfb.add_leakage_free_embeddings(t_splits, emb_mgr)
+            active_dfb    = t_dfb
+            active_splits = t_splits
+        else:
+            active_dfb    = dfb
+            active_splits = base_splits
+
+        tft_runner = TFTRunner(active_dfb, hparams=target_hparams)
+
+        for fold_idx, s in enumerate(active_splits):
             fold_num = s["fold"]
             print(f"\n{'─' * 55}")
             print(f" Fold {fold_num} | Target: {target}")
@@ -446,20 +452,20 @@ def main():
 
             if not args.no_baselines:
                 print("\n[AR]")
-                ar_order, ar_seasonal = ar_runner.run(splits, target=target, fold=fold_idx)
-                ar_df = ar_runner.predict(splits, target=target, fold=fold_idx)
+                ar_order, ar_seasonal = ar_runner.run(base_splits, target=target, fold=fold_idx)
+                ar_df = ar_runner.predict(base_splits, target=target, fold=fold_idx)
                 results["AR"][fold_num][target] = ar_df
                 print(f"  → {len(ar_df)} predictions (order={ar_order}, seasonal={ar_seasonal})")
 
                 print("\n[ARIMA]")
-                arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=fold_idx)
-                arima_df = arima_runner.predict(splits, target=target, fold=fold_idx)
+                arima_order, arima_seasonal = arima_runner.run(base_splits, target=target, fold=fold_idx)
+                arima_df = arima_runner.predict(base_splits, target=target, fold=fold_idx)
                 results["ARIMA"][fold_num][target] = arima_df
                 print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
             print("\n[TFT – training]")
             ckpt = tft_runner.run(
-                splits, target=target, fold=fold_idx,
+                active_splits, target=target, fold=fold_idx,
                 use_wandb=args.wandb, device=args.device,
                 run_name=f"{args.run_name}-{target}-fold{fold_num}",
             )
@@ -471,7 +477,7 @@ def main():
 
             print("\n[TFT – inference]")
             tft_df = tft_runner.predict(
-                ckpt, splits, target=target, fold=fold_idx, device=args.device,
+                ckpt, active_splits, target=target, fold=fold_idx, device=args.device,
             )
             results["TFT"][fold_num][target] = tft_df
             print(f"  → {len(tft_df)} predictions")

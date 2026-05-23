@@ -1,0 +1,10 @@
+model,target,MAE,RMSE,QuantileLoss,run_name,embedding,aggregation,timestamp
+AR,CPI,0.00268,0.00348,0.00063,default,auto,mean,2026-05-23 17:46
+ARIMA,CPI,0.00268,0.00349,0.00064,default,auto,mean,2026-05-23 17:46
+TFT,CPI,0.00195,0.00284,0.00092,default,auto,mean,2026-05-23 17:46
+AR,GDP,0.00331,0.00475,0.00086,default,auto,mean,2026-05-23 17:46
+ARIMA,GDP,0.0035,0.00489,0.00088,default,auto,mean,2026-05-23 17:46
+TFT,GDP,0.00223,0.00389,0.00077,default,auto,mean,2026-05-23 17:46
+AR,UNRATE,2.661,2.99886,0.68051,default,auto,mean,2026-05-23 17:46
+ARIMA,UNRATE,1.93349,2.25383,0.79807,default,auto,mean,2026-05-23 17:46
+TFT,UNRATE,1.66499,1.94898,0.72171,default,auto,mean,2026-05-23 17:46
