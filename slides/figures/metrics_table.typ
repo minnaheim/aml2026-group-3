@@ -30,19 +30,24 @@
     inset: (x: 0.6em, y: 0.35em),
     // booktabs-style: thick top + bottom, thin mid rule after header
     stroke: (_, y) => (
-      top:    if y == 0 { 1pt } else if y == 1 { 0.4pt } else { none },
-      bottom: if y == n { 1pt } else { none },
+      top:    if y == 0 { 2pt } else if y == 1 { 2pt } else { none },
+      bottom: if y == n { 2pt } else { none },
     ),
     [*Model*], [*Target*], [*MAE* #sym.arrow.b], [*RMSE* #sym.arrow.b],
-    ..rows.map(row => {
+    ..range(rows.len()).map(i => {
+      let row  = rows.at(i)
+      let sep  = i > 0 and row.at(i-target) != rows.at(i - 1).at(i-target)
       let best = float(row.at(i-mae)) == min-mae(row.at(i-target))
       let cell(v) = if best { [*#v*] } else { [#v] }
-      (
+      let cells = (
         cell(row.at(i-model)),
         cell(row.at(i-target)),
         cell(row.at(i-mae)),
         cell(row.at(i-rmse)),
       )
+      // insert a thin rule between target groups
+      if sep { (table.hline(stroke: (paint: luma(180), thickness: 2pt)),) + cells }
+      else   { cells }
     }).flatten()
   )
 }

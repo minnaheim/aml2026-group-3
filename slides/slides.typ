@@ -124,7 +124,12 @@
     #v(1em)
     #image("figures/tft-arch.jpg", height: 90%)
   ]
-
+  #speaker-notes[
+    based off Transformer, 
+    not only past inputs, but static metadata, known future inputs (any additional information that helps forecasts)
+    -> static enrichment?
+    -> Masked Interpretable MHA?
+  ]
 ]
 
 
