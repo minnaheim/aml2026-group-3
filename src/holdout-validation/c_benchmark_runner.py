@@ -53,7 +53,7 @@ class ARRunner:
                 d=0, D=0, 
                 # max AR(p=3)
                 start_p=0, max_p=3, start_q=0, max_q=0,
-                start_P=0, max_P=2, start_Q=0, max_Q=2, # also seasonal order fit
+                start_P=0, max_P=0, start_Q=0, max_Q=0, # no seasonal fit, not SAR 
                 m=m,
                 seasonal=True,
                 information_criterion="aic",
@@ -202,7 +202,7 @@ class ARIMARunner:
                 train_series.dropna(),
                 d=0, D=0,
                 start_p=0, max_p=3, start_q=0, max_q=3,
-                start_P=0, max_P=2, start_Q=0, max_Q=2,
+                start_P=0, max_P=0, start_Q=0, max_Q=0, # no seasonal fit, this is not SARIMA
                 m=m,
                 seasonal=True,
                 information_criterion="aic",
