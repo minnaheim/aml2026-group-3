@@ -1,0 +1,4 @@
+model,target,MAE,RMSE,QuantileLoss,run_name,embedding,aggregation,timestamp
+AR,CPI,0.00268,0.00348,0.00063,default,none,mean,2026-05-24 17:52
+ARIMA,CPI,0.00269,0.00349,0.00064,default,none,mean,2026-05-24 17:52
+TFT,CPI,0.0022,0.00304,0.00097,default,none,mean,2026-05-24 17:52
