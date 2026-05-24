@@ -2,6 +2,7 @@
 #import "figures/data_timeline.typ": data-timeline
 #import "figures/metrics_table.typ": metrics-table
 #import "figures/master_table.typ": master-table
+#import "figures/rel_rmse.typ": relrmse-table
 
 #show: presentation
 #set par(leading: 1.2em)
@@ -363,8 +364,12 @@
 ]
 
 #slide[
-  = Results
-  - Incl. Tables, Figures
+  = Answering Our Research Question
+
+  #v(0.4em)
+  #align(center)[
+    #relrmse-table()
+  ]
 ]
 
 #slide[
@@ -378,7 +383,7 @@
   = Future Work
   - Hyperparameter tuning: switch to one stage tuning! Also: context-dependent attention
   - Explore New Methods:
-    - use Foundational Model (i.e. TabPFN, TimesFN)
+    - Use Foundational Model (i.e. TabPFN, TimesFN)
     - Try out SSMs for forecasting
     - Combine with TFT: replace LSTM with SSM for sequence encoder // better for long-run dependencies, also more targeted for time series data!
   - Add Vintages: use real-time macro data (as available at forecast time) for more realistic evaluation
