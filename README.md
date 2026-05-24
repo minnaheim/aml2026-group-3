@@ -123,5 +123,5 @@ python src/holdout-validation/h_final_eval.py --tuned --embedding auto --run-nam
 
 ```bash
 # try all targets
-python src/holdout-validation/e_main.py --target UNRATE GDP --device cuda --horizon 6 --wandb 
+python src/holdout-validation/e_main.py --device cuda --horizon 6 --wandb 
 ```
