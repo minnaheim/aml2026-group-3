@@ -51,7 +51,7 @@
       #grid(
         columns: (auto, 1fr, auto),
         align: (left, center, right),
-        image("/slides/figures/uzh-logo.png", height: 1.5cm), [],
+        image("figures/uzh-logo.png", height: 1.5cm), [],
       )
     ],
   )
@@ -62,7 +62,7 @@
     {
       place(top + left)[
         #box(
-          image("/slides/figures/uzh2.jpg", width: 100%, fit: "cover"),
+          image("figures/uzh2.jpg", width: 100%, fit: "cover"),
           radius: 0.2em,
         )
       ]
