@@ -38,73 +38,52 @@ from a_embedding_manager  import EmbeddingManager
 from e_main               import compute_metrics, _setup_wandb
 
 # defines hyperparam grid
-def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, splits, dfb, use_wandb: bool = True) -> float:
-
+def objective(trial, args, root, splits, dfb, use_wandb=True):
+    
+    # joint search space — architecture + embedding params together
+    hparams = {
+        # data / feature params
+        "max_encoder_length":     trial.suggest_int("max_encoder_length", 12, 48),
+        "max_prediction_length":  args.horizon,
+        # architecture
+        "hidden_size":            trial.suggest_categorical("hidden_size", [8, 16, 32, 64, 128, 256]),
+        "hidden_continuous_size": trial.suggest_categorical("hidden_continuous_size", [2, 4, 8, 16]),
+        "lstm_layers":            2,
+        "dropout":                trial.suggest_float("dropout", 0.05, 0.55),
+        # optimisation
+        "learning_rate":          trial.suggest_float("learning_rate", 1e-4, 0.15, log=True),
+        # normalizer
+        "normalizer":             trial.suggest_categorical("normalizer", ["encoder_none", "group"]),
+        # fixed
+        "min_encoder_length":     8,
+        "attention_head_size":    2,
+        "max_epochs":             50,
+        "patience":               15,
+    }
+    
+    # embedding params only when embedding is active
     if args.embedding is not None:
-        # ── Stage 2: architecture fixed from stage-1 JSON; tune speech params ──
-        macro_path = root / "out" / "tuning" / args.target / f"macro_only_h{args.horizon}" / "best_params.json"
-        if not macro_path.exists():
-            raise FileNotFoundError(
-                f"Stage 1 params not found at {macro_path}. Run macro-only tuning first."
-            )
-        with open(macro_path) as f:
-            macro_params = {k: v for k, v in json.load(f).items() if not k.startswith("_")}
+        aggregation   = trial.suggest_categorical("aggregation", ["mean", "decay", "attention"])
+        reduction     = trial.suggest_categorical("reduction", ["pca", "fa"])
+        n_pca         = trial.suggest_int("n_pca", 5, 30)
+        speech_window = trial.suggest_int("speech_window_months", 3, 12)
 
-        # speech-specific search params
-        aggregation   = trial.suggest_categorical("aggregation",        ["mean", "decay", "attention"]) # switch to regular attention since context attention is so slow due to the month loop
-        reduction     = trial.suggest_categorical("reduction",          ["pca", "fa"])
-        n_pca         = trial.suggest_int("n_pca",                      5, 30)
-        speech_window = trial.suggest_int("speech_window_months",       3, 12)
-
-        # architecture fixed from stage 1; lstm_layers not stored in JSON (fixed at 2 in stage 1)
-        hparams = {
-            "max_prediction_length": args.horizon,
-            "min_encoder_length":    8,
-            "attention_head_size":   2,
-            "max_epochs":            50,
-            "patience":              15,
-            "lstm_layers":           2,
-            **macro_params,
-        }
-
-        # rebuild data per trial — aggregation and speech_window both vary
-        trial_dfb = DataFrameBuilder(str(root), aggregation=aggregation, speech_window=speech_window, device = args.device)
+        trial_dfb = DataFrameBuilder(str(root), aggregation=aggregation, 
+                                     speech_window=speech_window, device=args.device)
         trial_dfb.load_fomc_dissent()
         df = trial_dfb.process_data()
         trial_splits, _ = trial_dfb.generate_split(df)
-        emb = EmbeddingManager(str(root), embedding=args.embedding, n_pca=n_pca, reduction=reduction).load()
+        emb = EmbeddingManager(str(root), embedding=args.embedding, 
+                               n_pca=n_pca, reduction=reduction).load()
         trial_splits = trial_dfb.add_leakage_free_embeddings(trial_splits, emb)
-
     else:
-        # ── Stage 1: tune architecture params; data precomputed in run_study() ─
-        hparams = {
-            # data / feature params
-            "max_encoder_length":     trial.suggest_int("max_encoder_length", 12, 48),
-            "max_prediction_length":  args.horizon,   # fixed — horizon is a research variable, not a tuning param
-            # architecture
-            "hidden_size":            trial.suggest_categorical("hidden_size", [8, 16, 32, 64, 128, 256]),
-            "hidden_continuous_size": trial.suggest_categorical("hidden_continuous_size", [2, 4, 8, 16]),
-            "lstm_layers":            2,  # fixed — removed from search (was [4,8,16,32], too slow)
-            "dropout":                trial.suggest_float("dropout", 0.05, 0.55),
-            # optimisation
-            "learning_rate":          trial.suggest_float("learning_rate", 1e-4, 0.15, log=True),
-            # normalizer
-            "normalizer":             trial.suggest_categorical("normalizer", ["encoder_none", "group"]),  # encoder_softplus excluded: softplus(GDP_levels) overflows float32
-            # fixed
-            "min_encoder_length":     8,
-            "attention_head_size":    2,
-            "max_epochs":             50,
-            "patience":               15,
-        }
-        trial_dfb    = dfb      # precomputed once in run_study() — no disk I/O per trial
+        trial_dfb    = dfb
         trial_splits = splits
 
-    # use only the first n_folds folds to keep each trial fast
-    trial_splits = trial_splits[: args.n_folds]
-
+    trial_splits = trial_splits[:args.n_folds]
     runner = TFTRunner(trial_dfb, hparams=hparams)
     maes = []
-
+    
     for fold_idx in range(len(trial_splits)):
         try:
             run_name = f"trial-{trial.number}-{args.target}-fold{fold_idx}"
@@ -132,24 +111,17 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, splits,
     return float(np.mean(maes))
 
 
-def run_study(args: argparse.Namespace, root: Path) -> None:
-    """Run one Optuna study for args.target + args.horizon."""
-    if args.wandb:
-        _setup_wandb()
-
-    # output dir: stage 1 → macro_only_h{N}; stage 2 → {embedding}_h{N}
+def run_study(args, root):
+    # output dir — no more macro_only vs embedding separation
     tag     = args.embedding if args.embedding else "macro_only"
-    out_dir = root / "out" / "tuning" / args.target / f"{tag}_h{args.horizon}"
+    out_dir = root / "out" / "tuning_joint" / args.target / f"{tag}_h{args.horizon}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # precompute macro-only data once for stage 1 (stage 2 rebuilds per trial)
-    if args.embedding is None:
-        dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=12)
-        dfb.load_fomc_dissent()
-        df  = dfb.process_data()
-        splits, _ = dfb.generate_split(df)
-    else:
-        dfb, splits = None, None  # stage 2 builds per-trial inside objective()
+    # always precompute macro data (embedding rebuilds per trial anyway)
+    dfb = DataFrameBuilder(str(root), aggregation="mean", speech_window=12)
+    dfb.load_fomc_dissent()
+    df  = dfb.process_data()
+    splits, _ = dfb.generate_split(df)
 
     study_path = out_dir / "optuna_study.pkl"
 
@@ -224,7 +196,7 @@ def main():
         for target in ["CPI", "GDP", "UNRATE"]:
             for horizon in [3, 6, 12]:
                 print(f"\n{'='*60}")
-                print(f"  Stage 2: {target}  horizon={horizon}  embedding={args.embedding}")
+                print(f"  Joint tuning: {target}  horizon={horizon}  embedding={args.embedding}")
                 print(f"{'='*60}")
                 args.target  = target
                 args.horizon = horizon

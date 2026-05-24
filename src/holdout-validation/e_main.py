@@ -49,7 +49,7 @@ def _setup_wandb() -> None:
 
 # ── tuned hparams ────────────────────────────────────────────────────────────
 
-def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: int) -> tuple[dict, dict, str | None]:
+def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: int, joint: bool = False) -> tuple[dict, dict, str | None]:
     """Load best params saved by hyperparameter tuning.
 
     Returns (arch_params, emb_params, embedding) — params filtered of '_' keys.
@@ -60,8 +60,9 @@ def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: 
     embedding == None:   macro-only mode, no emb_params
     embedding == <name>: load params for that specific embedding
     """
-    tuning_dir = root / "out" / "tuning" / target
-    suffix     = f"_h{horizon}"
+    # use joint tuning dir if requested
+    tuning_dir = root / "out" / ("tuning_joint" if joint else "tuning") / target
+    suffix = f"_h{horizon}"
 
     def _read_raw(path: Path) -> dict:
         if path.exists():
@@ -72,7 +73,6 @@ def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: 
     def _strip_private(d: dict) -> dict:
         return {k: v for k, v in d.items() if not k.startswith("_")}
 
-    # auto-detect best embedding from tuning dirs when --embedding passed without a value
     if embedding == "auto":
         macro_raw = _read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json")
         best_mae  = macro_raw.get("_best_mae", float("inf"))
@@ -88,10 +88,20 @@ def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: 
         label = f"'{embedding}' (MAE={best_mae:.6f})" if embedding else f"macro-only (MAE={best_mae:.6f})"
         print(f"  [tuned] auto-selected embedding: {label}")
 
-    # macro-only mode: arch params only, no emb_params
-    arch_params = _strip_private(_read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json"))
-    emb_params  = _strip_private(_read_raw(tuning_dir / f"{embedding}{suffix}" / "best_params.json")) if embedding else {}
-    return arch_params, emb_params, embedding
+    if joint:
+        # joint tuning: everything in one file under {embedding}_h{horizon}
+        tag = embedding if embedding else "macro_only"
+        all_params = _strip_private(_read_raw(tuning_dir / f"{tag}{suffix}" / "best_params.json"))
+        # split into arch and emb params
+        emb_keys = {"aggregation", "reduction", "n_pca", "speech_window_months"}
+        arch_params = {k: v for k, v in all_params.items() if k not in emb_keys}
+        emb_params  = {k: v for k, v in all_params.items() if k in emb_keys}
+        return arch_params, emb_params, embedding
+    else:
+        # two-stage: separate arch and emb files
+        arch_params = _strip_private(_read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json"))
+        emb_params  = _strip_private(_read_raw(tuning_dir / f"{embedding}{suffix}" / "best_params.json")) if embedding else {}
+        return arch_params, emb_params, embedding
 
 
 # ── metrics ──────────────────────────────────────────────────────────────────
@@ -258,6 +268,9 @@ def main():
         description="Holdout validation pipeline: AR(1) benchmark vs TFT"
     )
     
+    parser.add_argument("--joint", action="store_true", default=False,
+                        help="Use joint tuning results from out/tuning_joint/")
+    
     # add a parser so that we do not need to rerun baselines all the time haha
     parser.add_argument(
         "--no-baselines", action="store_true", default=False,
@@ -407,7 +420,7 @@ def main():
     for target in args.targets:
         if args.tuned:
             arch_params, emb_params, t_embedding = load_tuned_hparams(
-                root, target, args.embedding, args.horizon
+                root, target, args.embedding, args.horizon, joint=args.joint
             )
             t_aggregation   = emb_params.get("aggregation",          args.aggregation)   if emb_params else args.aggregation
             t_reduction     = emb_params.get("reduction",            args.reduction)     if emb_params else args.reduction
