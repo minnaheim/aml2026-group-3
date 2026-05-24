@@ -51,7 +51,7 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, splits,
             macro_params = {k: v for k, v in json.load(f).items() if not k.startswith("_")}
 
         # speech-specific search params
-        aggregation   = trial.suggest_categorical("aggregation",        ["mean", "decay", "context_attention"])
+        aggregation   = trial.suggest_categorical("aggregation",        ["mean", "decay", "attention"]) # switch to regular attention since context attention is so slow due to the month loop
         reduction     = trial.suggest_categorical("reduction",          ["pca", "fa"])
         n_pca         = trial.suggest_int("n_pca",                      5, 30)
         speech_window = trial.suggest_int("speech_window_months",       3, 12)
@@ -68,7 +68,7 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, splits,
         }
 
         # rebuild data per trial — aggregation and speech_window both vary
-        trial_dfb = DataFrameBuilder(str(root), aggregation=aggregation, speech_window=speech_window)
+        trial_dfb = DataFrameBuilder(str(root), aggregation=aggregation, speech_window=speech_window, device = args.device)
         trial_dfb.load_fomc_dissent()
         df = trial_dfb.process_data()
         trial_splits, _ = trial_dfb.generate_split(df)

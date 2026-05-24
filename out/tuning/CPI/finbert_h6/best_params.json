@@ -1,0 +1,10 @@
+{
+  "aggregation": "decay",
+  "reduction": "pca",
+  "n_pca": 23,
+  "speech_window_months": 3,
+  "_best_mae": 0.0018455847280171235,
+  "_n_trials": 20,
+  "_total_minutes": 55.0,
+  "_minutes_per_trial": 2.8
+}

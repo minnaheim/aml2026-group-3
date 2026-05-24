@@ -1,0 +1,10 @@
+{
+  "aggregation": "mean",
+  "reduction": "pca",
+  "n_pca": 8,
+  "speech_window_months": 7,
+  "_best_mae": 0.0018471248229308818,
+  "_n_trials": 20,
+  "_total_minutes": 45.6,
+  "_minutes_per_trial": 2.3
+}

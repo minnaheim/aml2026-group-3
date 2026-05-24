@@ -15,6 +15,12 @@ checkpoints
 wandb
 
 out/
+# DO NOT ignore the tuning subdirectory structure
+!out/tuning/
+out/tuning/*
+!out/tuning/*.pkl
+!out/tuning/*.json
+
 **/*lightning_logs
 
 lightning_logs/

@@ -40,11 +40,11 @@ Below you will find a project overview of the most important files.
 
 ---
 
-## Running the pipeline
+## Running the pipelin
 
 Default targets (`CPI`, `UNRATE`, `GDP`) on GPU with W&B logging:
 ```bash
-python src/holdout-validation/e_main.py --wandb --device cuda
+python src/holdout-validation/e_main.py --tuned --wandb --horizon 12 --device cuda
 ```
 
 Single target:
@@ -109,4 +109,12 @@ python src/holdout-validation/g_tune_hyperparams.py --embedding fomc-roberta --n
 # RUN ENTIRE STAGE 2 WITH FINBERT
 python src/holdout-validation/g_tune_hyperparams.py --embedding finbert --n-trials 20 --all --device cuda
 
+```
+
+
+## Final Holdout Eval
+
+```bash
+python src/holdout-validation/h_final_eval.py --tuned --horizon 12 --device cuda
+python src/holdout-validation/h_final_eval.py --tuned --embedding auto --run-name final_emb --horizon 12 --device cuda
 ```

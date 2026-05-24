@@ -3,11 +3,12 @@
 Holdout validation pipeline: AR(1) benchmark vs TFT.
 
 Usage:
-    python main.py
-    python main.py --targets CPI GDP --device mps --wandb
-    python main.py --targets UNRATE --device cuda
+    python src/holdout-validation/e_main.py
+    python src/holdout-validation/e_main.py --targets CPI GDP --device mps --wandb
+    python src/holdout-validation/e_main.py --targets UNRATE --device cuda
 """
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -46,6 +47,53 @@ def _setup_wandb() -> None:
     wandb.login()
 
 
+# ── tuned hparams ────────────────────────────────────────────────────────────
+
+def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: int) -> tuple[dict, dict, str | None]:
+    """Load best params saved by hyperparameter tuning.
+
+    Returns (arch_params, emb_params, embedding) — params filtered of '_' keys.
+    arch_params: always from macro_only_h{horizon}/best_params.json (target-specific TFT arch)
+    emb_params:  from {embedding}_h{horizon}/best_params.json, or {} if embedding is None
+
+    embedding == "auto": scan all tuning dirs for target+horizon, pick the one with lowest _best_mae
+    embedding == None:   macro-only mode, no emb_params
+    embedding == <name>: load params for that specific embedding
+    """
+    tuning_dir = root / "out" / "tuning" / target
+    suffix     = f"_h{horizon}"
+
+    def _read_raw(path: Path) -> dict:
+        if path.exists():
+            return json.loads(path.read_text())
+        print(f"  [tuned] WARNING: {path} not found — using defaults")
+        return {}
+
+    def _strip_private(d: dict) -> dict:
+        return {k: v for k, v in d.items() if not k.startswith("_")}
+
+    # auto-detect best embedding from tuning dirs when --embedding passed without a value
+    if embedding == "auto":
+        macro_raw = _read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json")
+        best_mae  = macro_raw.get("_best_mae", float("inf"))
+        best_emb  = None
+        if tuning_dir.exists():
+            for d in sorted(tuning_dir.iterdir()):  # sorted for determinism
+                if d.is_dir() and d.name.endswith(suffix) and not d.name.startswith("macro_only"):
+                    raw = _read_raw(d / "best_params.json")
+                    if raw.get("_best_mae", float("inf")) < best_mae:
+                        best_mae = raw["_best_mae"]
+                        best_emb = d.name[: -len(suffix)]  # strip _h{horizon} suffix
+        embedding = best_emb
+        label = f"'{embedding}' (MAE={best_mae:.6f})" if embedding else f"macro-only (MAE={best_mae:.6f})"
+        print(f"  [tuned] auto-selected embedding: {label}")
+
+    # macro-only mode: arch params only, no emb_params
+    arch_params = _strip_private(_read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json"))
+    emb_params  = _strip_private(_read_raw(tuning_dir / f"{embedding}{suffix}" / "best_params.json")) if embedding else {}
+    return arch_params, emb_params, embedding
+
+
 # ── metrics ──────────────────────────────────────────────────────────────────
 
 def compute_metrics(df: pd.DataFrame) -> dict:
@@ -54,8 +102,8 @@ def compute_metrics(df: pd.DataFrame) -> dict:
     rmse = float(np.sqrt(np.mean(errors ** 2)))
 
     # Relative RMSE (divide RMSE by std of actuals)
-    std_actual = np.std(df["actual"].values)
-    rel_rmse = float(rmse / std_actual) if std_actual > 0 else np.nan
+    # std_actual = np.std(df["actual"].values)
+    # rel_rmse = float(rmse / std_actual) if std_actual > 0 else np.nan
 
     # Quantile loss (if quantiles available)
     quantile_loss = np.nan
@@ -74,19 +122,28 @@ def compute_metrics(df: pd.DataFrame) -> dict:
         quantile_loss = float((ql_10 + ql_90) / 2)
 
     return {
-        "MAE": round(mae, 5),
-        "RMSE": round(rmse, 5),
-        "rel_RMSE": round(rel_rmse, 5),
-        "QuantileLoss": round(quantile_loss, 5) if not np.isnan(quantile_loss) else np.nan,
+        # raw
+        "MAE": mae,           
+        "RMSE": rmse,
+        # "rel_RMSE": rel_rmse,
+        "QuantileLoss": quantile_loss if not np.isnan(quantile_loss) else np.nan,
+        # rounded versions for display
+        "MAE_display": round(mae, 5),
+        "RMSE_display": round(rmse, 5),
+        # "rel_RMSE_display": round(rel_rmse, 5),
+        "QuantileLoss_display": round(quantile_loss, 5) if not np.isnan(quantile_loss) else np.nan,
     }
 
 
 # ── save ─────────────────────────────────────────────────────────────────────
 
-def save_results(results: dict, out_dir: Path, run_name="default", embedding="none", aggregation="mean") -> pd.DataFrame:
-    """Save per-fold CSVs + per-fold metrics + fold-averaged metrics."""
+def save_results(results: dict, out_dir: Path, run_name="default", embedding="none", aggregation="mean", ablation_mode=False, horizon: int = 12) -> pd.DataFrame:
+    """Save per-fold CSVs + per-fold metrics + fold-averaged metrics.
+
+    ablation_mode=True  → append to out/holdout/experiments.csv (multi-run comparison)
+    ablation_mode=False → overwrite out/holdout/{run_name}/metrics_h{horizon}_{embedding}.csv
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-    # allow to save results from different runs
     run_dir = out_dir / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     
@@ -98,12 +155,22 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
                 m = compute_metrics(df)
                 rows.append({"model": model, "fold": fold, "target": target, **m})
 
-    metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE", "RMSE", "rel_RMSE", "QuantileLoss"] if c in pd.DataFrame(rows).columns]]
+    metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE_display", "RMSE_display", 
+                                                #  "rel_RMSE_display", 
+                                                 "QuantileLoss_display"] if c in pd.DataFrame(rows).columns]]
     metrics_df = metrics_df.sort_values(by=["target", "model", "fold"]).reset_index(drop=True)
+    metrics_df = metrics_df.rename(columns={
+        "MAE_display": "MAE",
+        "RMSE_display": "RMSE", 
+        # "rel_RMSE_display": "rel_RMSE",
+        "QuantileLoss_display": "QuantileLoss"
+    })
     metrics_df.to_csv(run_dir  / "metrics_per_fold.csv", index=False)
 
     avg_df = (
-        metrics_df.groupby(["model", "target"])[[c for c in ["MAE", "RMSE", "rel_RMSE", "QuantileLoss"] if c in metrics_df.columns]]
+        metrics_df.groupby(["model", "target"])[[c for c in ["MAE", "RMSE",
+                                                            #   "rel_RMSE", 
+                                                              "QuantileLoss"] if c in metrics_df.columns]]
         .mean().round(5).reset_index()
         .sort_values(by=["target", "model"]).reset_index(drop=True)
     )
@@ -113,9 +180,16 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
     avg_df["aggregation"] = aggregation
     avg_df["timestamp"]   = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
     
-    master_path = out_dir / "experiments.csv"
-    
-    avg_df.to_csv(master_path, mode="a", header=not master_path.exists(), index=False)
+    if ablation_mode:
+        # ablation run: append to shared experiments.csv for multi-run comparison
+        master_path = out_dir / "experiments.csv"
+        avg_df.to_csv(master_path, mode="a", header=not master_path.exists(), index=False)
+    else:
+        # standalone run: overwrite per-run metrics file (clean slate each time)
+        emb_tag = embedding if embedding != "none" else "macro"
+        metrics_path = run_dir / f"metrics_h{horizon}_{emb_tag}.csv"
+        avg_df.to_csv(metrics_path, index=False)
+        print(f"Metrics saved → {metrics_path}")
 
     print("\n=== Evaluation Metrics (per fold) ===")
     print(metrics_df.to_string(index=False))
@@ -126,7 +200,7 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
 
 # ── plot ──────────────────────────────────────────────────────────────────────
 
-def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
+def plot_results(results: dict, out_dir: Path, run_name: str = "default", horizon: int = 12, embedding: str | None = None):
     # collect all targets across all folds
     targets = sorted({t for fold_res in results.values() for tr in fold_res.values() for t in tr})
     _, axes = plt.subplots(len(targets), 1, figsize=(14, 4 * len(targets)), squeeze=False)
@@ -150,16 +224,16 @@ def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
                         color="black", linewidth=1.5, label="Actual")
                 actual_drawn = True
 
-                ax.plot(df["date"], df["predicted"],
-                    color=colors.get(model, "orange"),
-                    linewidth=1.5,
-                    linestyle=linestyles.get(model, "-"),
-                    label=f"{model} Predicted")
+            ax.plot(df["date"], df["predicted"],
+                color=colors.get(model, "orange"),
+                linewidth=1.5,
+                linestyle=linestyles.get(model, "-"),
+                label=f"{model} Predicted")
 
-                # Add prediction interval fill for TFT quantiles if available
-                if model == "TFT" and "pred_lo" in df.columns and "pred_hi" in df.columns:
-                    ax.fill_between(df["date"], df["pred_lo"], df["pred_hi"],
-                        color=colors["TFT"], alpha=0.15, label="TFT 10–90% PI")
+            # Add prediction interval fill for TFT quantiles if available
+            if model == "TFT" and "pred_lo" in df.columns and "pred_hi" in df.columns:
+                ax.fill_between(df["date"], df["pred_lo"], df["pred_hi"],
+                    color=colors["TFT"], alpha=0.15, label="TFT 10–90% PI")
 
         ax.set_title(f"{target}: Predicted vs Actual")
         ax.set_xlabel("Date")
@@ -169,7 +243,8 @@ def plot_results(results: dict, out_dir: Path, run_name: str = "default"):
     plt.tight_layout()
     run_dir = out_dir / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
-    path = run_dir / "predictions_vs_actuals.png"
+    emb_tag = embedding if embedding else "macro"
+    path = run_dir / f"predictions_vs_actuals_h{horizon}_{emb_tag}.png"
     plt.savefig(path, bbox_inches="tight", dpi=150)
     plt.close()
     print(f"Plot saved → {path}")
@@ -203,9 +278,12 @@ def main():
         help="Compute device for TFT (default: cpu)",
     )
     parser.add_argument(
-        "--embedding", default=None,
-        choices=["fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", "roberta", "llama3.1"],
-        help="Speech embedding to include (default: none — macro-only mode)",
+        "--embedding", nargs="?", const="auto", default=None,
+        choices=["auto", "fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", "roberta", "llama3.1"],
+        help=(
+            "Speech embedding: omit for macro-only; pass flag alone (--embedding) to "
+            "auto-select best from tuning dirs; or give a name (--embedding fomc-roberta)"
+        ),
     )
     
     parser.add_argument(
@@ -214,7 +292,7 @@ def main():
     )
     
     parser.add_argument(
-        "--horizon", type=int, default=12, choices=[1, 6, 12],
+        "--horizon", type=int, default=12, choices=[3, 6, 12],
         help="Forecast horizon in months (default: 12)",
     )
     
@@ -234,6 +312,19 @@ def main():
         help="Unique name for this run (used for output subfolder)",
     )
 
+    parser.add_argument(
+        "--ablation-mode", action="store_true", default=False,
+        help="Append results to experiments.csv (multi-run); default overwrites per-run metrics.csv",
+    )
+    parser.add_argument(
+        "--tuned", action="store_true", default=False,
+        help=(
+            "Load best hyperparams from out/tuning/{TARGET}/macro_only_h{horizon}/ "
+            "(arch) and out/tuning/{TARGET}/{embedding}_h{horizon}/ (emb). "
+            "Embedding params are taken from the first target; arch params are per-target."
+        ),
+    )
+
     # ── TFT hyperparams (override defaults from HPARAMS_DEFAULTS) ────────────
     parser.add_argument("--encoder-length",         type=int,   default=24,   help="max_encoder_length (default 24)")
     parser.add_argument("--speech-window",          type=int,   default=12,   help="SPEECH_WINDOW_MONTHS (default 12)")
@@ -249,9 +340,9 @@ def main():
     
     args = parser.parse_args()
 
-    # make sure that there is no sneaky cuda being used 
-    if args.device != "cuda":                                                                                                                                            
-          os.environ["CUDA_VISIBLE_DEVICES"] = ""   
+    # make sure that there is no sneaky cuda being used
+    if args.device != "cuda":
+          os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     root    = Path(__file__).parent.parent.parent
     out_dir = root / "out" / "holdout"
@@ -259,17 +350,19 @@ def main():
     if args.wandb:
         _setup_wandb()
 
+    emb_tag = args.embedding or "none"
     print(f"Targets   : {args.targets}")
     print(f"Device    : {args.device}")
-    print(f"Embedding : {args.embedding or 'none'}")
+    print(f"Embedding : {emb_tag}{'  (per-target auto-select)' if args.embedding == 'auto' and args.tuned else ''}")
     print(f"Horizon   : {args.horizon}")
+    print(f"Tuned     : {args.tuned}")
     print(f"W&B       : {args.wandb}")
     print(f"Output    : {out_dir}\n")
 
-    # ── 1. split the data acc. to data-frame-builder ─────────────────────────
+    # ── 1. build base data (macro + dissents, no embeddings) ─────────────────
     # dissents are loaded explicitly so those features appear in process_data()
     # regardless of whether embeddings are used
-    hparams = {
+    base_hparams = {
         "max_prediction_length":  args.horizon,
         "max_encoder_length":     args.encoder_length,
         "speech_window_months":   args.speech_window,
@@ -284,20 +377,9 @@ def main():
     dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window)
     dfb.load_fomc_dissent()
     df  = dfb.process_data()
-    splits, holdout = dfb.generate_split(df)
+    base_splits, holdout = dfb.generate_split(df)
 
-    if args.embedding is not None: # allow for different models!
-        # re-fit PCA per fold on training speeches only — no look-ahead leakage
-        # NOW: depending on whether we actually call pca or "none" (or factor analysis, to do)
-        emb = EmbeddingManager(
-            str(root), 
-            embedding=args.embedding, 
-            n_pca=args.n_pca,
-            reduction=args.reduction
-        ).load()
-        splits = dfb.add_leakage_free_embeddings(splits, emb)
-
-    for s in splits:
+    for s in base_splits:
         tr, te = s["train"], s["test"]
         print(
             f"Fold {s['fold']}: "
@@ -308,41 +390,82 @@ def main():
         f"Holdout : [{holdout['date'].min().date()} – {holdout['date'].max().date()}] "
         f"({len(holdout)} rows)\n"
     )
-    # initiate runners
-    ar_runner    = ARRunner(dfb,    max_prediction_length=hparams["max_prediction_length"])
-    arima_runner = ARIMARunner(dfb, max_prediction_length=hparams["max_prediction_length"])
-    tft_runner   = TFTRunner(dfb,   hparams=hparams)
+
+    # initiate baseline runners (stateless between targets, never need embeddings)
+    ar_runner    = ARRunner(dfb,    max_prediction_length=args.horizon)
+    arima_runner = ARIMARunner(dfb, max_prediction_length=args.horizon)
 
     # results[model][fold_num][target] = predictions DataFrame
-    results = {"TFT": {s["fold"]: {} for s in splits}}
+    results = {"TFT": {s["fold"]: {} for s in base_splits}}
     if not args.no_baselines:
-        results["AR"]    = {s["fold"]: {} for s in splits}
-        results["ARIMA"] = {s["fold"]: {} for s in splits}
+        results["AR"]    = {s["fold"]: {} for s in base_splits}
+        results["ARIMA"] = {s["fold"]: {} for s in base_splits}
 
-    # ── 2. run all models for each fold × target ──────────────────────────────
-    for fold_idx, s in enumerate(splits):
-        fold_num = s["fold"]
-        for target in args.targets:
+    # ── 2. run all models for each target × fold ──────────────────────────────
+    # embeddings are resolved PER TARGET so each target uses its own optimal
+    # embedding type, aggregation, n_pca, and speech_window from tuning
+    for target in args.targets:
+        if args.tuned:
+            arch_params, emb_params, t_embedding = load_tuned_hparams(
+                root, target, args.embedding, args.horizon
+            )
+            t_aggregation   = emb_params.get("aggregation",          args.aggregation)   if emb_params else args.aggregation
+            t_reduction     = emb_params.get("reduction",            args.reduction)     if emb_params else args.reduction
+            t_n_pca         = emb_params.get("n_pca",                args.n_pca)         if emb_params else args.n_pca
+            t_speech_window = emb_params.get("speech_window_months", args.speech_window) if emb_params else args.speech_window
+            target_hparams  = {**base_hparams, **arch_params, "speech_window_months": t_speech_window}
+            print(f"\n[tuned] {target}: embedding={t_embedding}, arch={arch_params}")
+            if emb_params:
+                print(f"[tuned] {target}: emb_params={emb_params}")
+        else:
+            t_embedding     = args.embedding
+            t_aggregation   = args.aggregation
+            t_reduction     = args.reduction
+            t_n_pca         = args.n_pca
+            t_speech_window = args.speech_window
+            target_hparams  = base_hparams
+
+        # build per-target embedding-augmented splits for TFT
+        # AR/ARIMA always use base_splits (they don't use embedding features)
+        if t_embedding is not None:
+            # re-fit PCA per fold on training speeches only — no look-ahead leakage
+            t_dfb = DataFrameBuilder(str(root), aggregation=t_aggregation, speech_window=t_speech_window)
+            t_dfb.load_fomc_dissent()
+            t_splits, _ = t_dfb.generate_split(df)  # reuse processed df, same split dates
+            emb_mgr  = EmbeddingManager(
+                str(root), embedding=t_embedding, n_pca=t_n_pca, reduction=t_reduction
+            ).load()
+            t_splits = t_dfb.add_leakage_free_embeddings(t_splits, emb_mgr)
+            active_dfb    = t_dfb
+            active_splits = t_splits
+        else:
+            active_dfb    = dfb
+            active_splits = base_splits
+
+        tft_runner = TFTRunner(active_dfb, hparams=target_hparams)
+
+        for fold_idx, s in enumerate(active_splits):
+            fold_num = s["fold"]
             print(f"\n{'─' * 55}")
             print(f" Fold {fold_num} | Target: {target}")
             print(f"{'─' * 55}")
 
             if not args.no_baselines:
                 print("\n[AR]")
-                ar_order, ar_seasonal = ar_runner.run(splits, target=target, fold=fold_idx)
-                ar_df = ar_runner.predict(splits, target=target, fold=fold_idx)
+                ar_order, ar_seasonal = ar_runner.run(base_splits, target=target, fold=fold_idx)
+                ar_df = ar_runner.predict(base_splits, target=target, fold=fold_idx)
                 results["AR"][fold_num][target] = ar_df
                 print(f"  → {len(ar_df)} predictions (order={ar_order}, seasonal={ar_seasonal})")
 
                 print("\n[ARIMA]")
-                arima_order, arima_seasonal = arima_runner.run(splits, target=target, fold=fold_idx)
-                arima_df = arima_runner.predict(splits, target=target, fold=fold_idx)
+                arima_order, arima_seasonal = arima_runner.run(base_splits, target=target, fold=fold_idx)
+                arima_df = arima_runner.predict(base_splits, target=target, fold=fold_idx)
                 results["ARIMA"][fold_num][target] = arima_df
                 print(f"  → {len(arima_df)} predictions (order={arima_order}, seasonal={arima_seasonal})")
 
             print("\n[TFT – training]")
             ckpt = tft_runner.run(
-                splits, target=target, fold=fold_idx,
+                active_splits, target=target, fold=fold_idx,
                 use_wandb=args.wandb, device=args.device,
                 run_name=f"{args.run_name}-{target}-fold{fold_num}",
             )
@@ -354,19 +477,22 @@ def main():
 
             print("\n[TFT – inference]")
             tft_df = tft_runner.predict(
-                ckpt, splits, target=target, fold=fold_idx, device=args.device,
+                ckpt, active_splits, target=target, fold=fold_idx, device=args.device,
             )
             results["TFT"][fold_num][target] = tft_df
             print(f"  → {len(tft_df)} predictions")
 
     # ── 3. save predictions vs. actuals, calculate eval metrics ──────────────
-    save_results(results, out_dir, 
+    save_results(results, out_dir,
              run_name=args.run_name,
              embedding=args.embedding or "none",
-             aggregation=args.aggregation)
+             aggregation=args.aggregation,
+             ablation_mode=args.ablation_mode,
+             horizon=args.horizon)
 
     # ── 4. plot results ───────────────────────────────────────────────────────
-    plot_results(results, out_dir, run_name=args.run_name)
+    plot_results(results, out_dir, run_name=args.run_name,
+                 horizon=args.horizon, embedding=args.embedding)
 
 
 if __name__ == "__main__":
