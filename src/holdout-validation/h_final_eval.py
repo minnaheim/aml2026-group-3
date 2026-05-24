@@ -5,6 +5,8 @@ Final holdout evaluation: train on ALL pre-holdout data, evaluate on the true ho
 Run AFTER CV and HP tuning are complete. The holdout set (~Dec 2022 – Dec 2023) has
 never been touched during training or tuning.
 
+THIS SHOULD ONLY EVER BE RUN WITH TUNED!!!
+
 Usage:
     python src/holdout-validation/h_final_eval.py --tuned --horizon 12
     python src/holdout-validation/h_final_eval.py --tuned --embedding auto --run-name final_emb --horizon 12
@@ -120,6 +122,7 @@ def main():
     dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window)
     dfb.load_fomc_dissent()
     df  = dfb.process_data()
+    # unlike in main, splits egal, only holdout here
     _, holdout = dfb.generate_split(df)
 
     # train = everything before the holdout window

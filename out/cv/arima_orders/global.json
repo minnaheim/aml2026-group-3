@@ -124,5 +124,47 @@
       4
     ],
     "selection_end": "2013-07-01 00:00:00"
+  },
+  "CPI_MS_foldholdout": {
+    "order": [
+      1,
+      0,
+      2
+    ],
+    "seasonal_order": [
+      0,
+      0,
+      0,
+      12
+    ],
+    "selection_end": "2022-12-01 00:00:00"
+  },
+  "UNRATE_MS_foldholdout": {
+    "order": [
+      2,
+      0,
+      1
+    ],
+    "seasonal_order": [
+      0,
+      0,
+      0,
+      12
+    ],
+    "selection_end": "2022-12-01 00:00:00"
+  },
+  "GDP_QS_foldholdout": {
+    "order": [
+      0,
+      0,
+      0
+    ],
+    "seasonal_order": [
+      0,
+      0,
+      0,
+      4
+    ],
+    "selection_end": "2022-10-01 00:00:00"
   }
 }
