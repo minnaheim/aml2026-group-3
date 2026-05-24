@@ -119,7 +119,7 @@ def main():
         "normalizer":             args.normalizer,
     }
 
-    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window)
+    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window, device = args.device)
     dfb.load_fomc_dissent()
     df  = dfb.process_data()
     # unlike in main, splits egal, only holdout here
@@ -145,6 +145,8 @@ def main():
         results["ARIMA"] = {"holdout": {}}
 
     # ── 2. run all models for each target ─────────────────────────────────────
+    last_aggregation = args.aggregation # as default
+    last_embedding = args.embedding or "none" # again, as default
     for target in args.targets:
         if args.tuned:
             arch_params, emb_params, t_embedding = load_tuned_hparams(
@@ -158,6 +160,8 @@ def main():
             print(f"\n[tuned] {target}: embedding={t_embedding}, arch={arch_params}")
             if emb_params:
                 print(f"[tuned] {target}: emb_params={emb_params}")
+            last_aggregation = t_aggregation    
+            last_embedding = t_embedding or "none"
         else:
             t_embedding     = args.embedding
             t_aggregation   = args.aggregation
@@ -168,7 +172,7 @@ def main():
 
         # build embedding-augmented holdout_splits for TFT (AR/ARIMA always use base splits)
         if t_embedding is not None:
-            t_dfb = DataFrameBuilder(str(root), aggregation=t_aggregation, speech_window=t_speech_window)
+            t_dfb = DataFrameBuilder(str(root), aggregation=t_aggregation, speech_window=t_speech_window, device = args.device)
             t_dfb.load_fomc_dissent()
             # reconstruct holdout_splits for this target's dfb (same date boundaries, fresh dfb)
             t_holdout_splits = [{"fold": "holdout", "train": df_cv.copy(), "test": holdout.copy()}]
@@ -223,8 +227,8 @@ def main():
     # ── 3. save and plot ──────────────────────────────────────────────────────
     save_results(results, out_dir,
                  run_name=args.run_name,
-                 embedding=args.embedding or "none",
-                 aggregation=args.aggregation,
+                 embedding=last_embedding or "none",
+                 aggregation=last_aggregation,
                  ablation_mode=False,
                  horizon=args.horizon)
 
