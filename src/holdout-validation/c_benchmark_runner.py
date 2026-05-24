@@ -7,8 +7,9 @@ from pmdarima import auto_arima
 from pathlib import Path
 import json
 
-# mirrors AR-benchmark.py: CPI/PAYEMS/INDPRO/GDP are log-differenced before fitting
-# UNRATE is mean-reverting in practice and is kept in levels
+# set max lag length for AR and ARIMA
+max_p = 12
+max_q = 12
 
 # ---------------------------------------------------------------------------
 # AR Runner
@@ -52,7 +53,7 @@ class ARRunner:
                 train_series.dropna(),
                 d=0, D=0, 
                 # max AR(p=3)
-                start_p=0, max_p=3, start_q=0, max_q=0,
+                start_p=0, max_p=max_p, start_q=0, max_q=0, # q = 0 since AR of course :)
                 start_P=0, max_P=0, start_Q=0, max_Q=0, # no seasonal fit, not SAR 
                 m=m,
                 seasonal=True,
@@ -202,7 +203,7 @@ class ARIMARunner:
             fit = auto_arima(
                 train_series.dropna(),
                 d=0, D=0,
-                start_p=0, max_p=3, start_q=0, max_q=3,
+                start_p=0, max_p=max_p, start_q=0, max_q=max_q,
                 start_P=0, max_P=0, start_Q=0, max_Q=0, # no seasonal fit, this is not SARIMA
                 m=m,
                 seasonal=True,
