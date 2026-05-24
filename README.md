@@ -110,3 +110,11 @@ python src/holdout-validation/g_tune_hyperparams.py --embedding fomc-roberta --n
 python src/holdout-validation/g_tune_hyperparams.py --embedding finbert --n-trials 20 --all --device cuda
 
 ```
+
+
+## Final Holdout Eval
+
+```bash
+python src/holdout-validation/h_final_eval.py --tuned --horizon 12
+python src/holdout-validation/h_final_eval.py --tuned --embedding auto --run-name final_emb --horizon 12
+```

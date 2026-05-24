@@ -432,13 +432,13 @@ typst#slide[
   ]
   #only("1")[
     #place(center)[
-    #image("../out/holdout/default/predictions_vs_actuals_h12_macro.png")
+      #image("/out/holdout/default/predictions_vs_actuals_h12_macro.png")
   ]
   ]
   #only("2")[
     #v(3em)
     #place(center)[
-    #metrics-table(path: "../../out/holdout/default/metrics_h12_macro.csv")
+    #metrics-table(path: "../out/holdout/default/metrics_h12_macro.csv")
     ]
   ]
 

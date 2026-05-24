@@ -74,7 +74,7 @@ class ARRunner:
         return order, seasonal_order
 
     # main run
-    def run(self, splits, target: str = "CPI", fold: int = 0) -> tuple:
+    def run(self, splits, target: str = "CPI", fold: int = 0, fold_label=None) -> tuple:
         train = self.dfb.get_data(splits, train=True,  model="AR", target=target, fold=fold)
 
         freq   = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
@@ -84,7 +84,8 @@ class ARRunner:
         selection_end = stationary.index.max()
         min_required  = 24 if freq == "MS" else 8
         cached_orders = self._load_orders("global")
-        cache_key     = f"{target}_{freq}_fold{fold}"  # fold-specific to avoid cross-fold pollution
+        lbl       = fold_label if fold_label is not None else fold
+        cache_key = f"{target}_{freq}_fold{lbl}"  # fold-specific to avoid cross-fold pollution
 
         if len(stationary.dropna()) >= min_required:
             order, seasonal_order = self._find_order(
@@ -223,7 +224,7 @@ class ARIMARunner:
         return order, seasonal_order
 
     # main run
-    def run(self, splits, target: str = "CPI", fold: int = 0) -> tuple:
+    def run(self, splits, target: str = "CPI", fold: int = 0, fold_label=None) -> tuple:
         train = self.dfb.get_data(splits, train=True,  model="ARIMA", target=target, fold=fold)
 
         freq   = "QS" if target in self.dfb.QUARTERLY_TARGETS else "MS"
@@ -234,7 +235,8 @@ class ARIMARunner:
         selection_end = series.index.max()
         min_required  = 24 if freq == "MS" else 8
         cached_orders = self._load_orders("global")
-        cache_key     = f"{target}_{freq}_fold{fold}"  # fold-specific to avoid cross-fold pollution
+        lbl       = fold_label if fold_label is not None else fold
+        cache_key = f"{target}_{freq}_fold{lbl}"  # fold-specific to avoid cross-fold pollution
 
         if len(stationary.dropna()) >= min_required:
             order, seasonal_order = self._find_order(
