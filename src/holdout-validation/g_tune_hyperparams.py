@@ -87,7 +87,7 @@ def objective(trial: optuna.Trial, args: argparse.Namespace, root: Path, splits,
             "lstm_layers":            2,  # fixed — removed from search (was [4,8,16,32], too slow)
             "dropout":                trial.suggest_float("dropout", 0.05, 0.55),
             # optimisation
-            "learning_rate":          trial.suggest_float("learning_rate", 1e-4, 0.15, log=True),
+            "learning_rate":          trial.suggest_float("learning_rate", 1e-6, 0.15, log=True),
             # normalizer
             "normalizer":             trial.suggest_categorical("normalizer", ["encoder_none", "group"]),  # encoder_softplus excluded: softplus(GDP_levels) overflows float32
             # fixed

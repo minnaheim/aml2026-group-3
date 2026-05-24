@@ -98,3 +98,9 @@
   - At least, this is the case in Switzerland and many other European countries, in particular for GDP
 
 
+### future to dos:
+
+- use batch-size as a hyperparam
+- check waht hyperparams are in the tft paper
+- need more data... pre-train with gdp of different countries, i.e. 
+- else, foundational model?
