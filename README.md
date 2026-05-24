@@ -44,7 +44,7 @@ Below you will find a project overview of the most important files.
 
 Default targets (`CPI`, `UNRATE`, `GDP`) on GPU with W&B logging:
 ```bash
-python src/holdout-validation/e_main.py --tuned --wandb --horizon 12
+python src/holdout-validation/e_main.py --tuned --wandb --horizon 12 --device cuda
 ```
 
 Single target:
