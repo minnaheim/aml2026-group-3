@@ -28,11 +28,11 @@ HPARAMS_DEFAULTS = {
     "max_encoder_length":     24,
     "max_prediction_length":  12,
     "min_encoder_length":     8,
-    "patience":               15,
-    "max_epochs":             50,
+    "patience":               1000,
+    "max_epochs":             1000,
     "learning_rate":          0.03,
     "lstm_layers":            2,
-    "hidden_size":            64,
+    "hidden_size":            32,
     "attention_head_size":    2,
     "hidden_continuous_size": 8,
     "dropout":                0.2,
@@ -119,7 +119,7 @@ class TFTRunner:
 
         return df
 
-    def create_tft_dataset(self, train_df, target: str, fold, batch_size: int = 128):
+    def create_tft_dataset(self, train_df, target: str, fold, batch_size: int = 16):
         """
             Build TimeSeriesDataSet and dataloaders. 
             Target is one of MACRO_VARS.
@@ -290,7 +290,7 @@ class TFTRunner:
 
         return importance_dfs
 
-    def run(self, splits, target: str, fold: int = 0, batch_size: int = 128,
+    def run(self, splits, target: str, fold: int = 0, batch_size: int = 16,
             use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu',
             run_name: str = 'tft-holdout') -> str:
         """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
@@ -305,7 +305,7 @@ class TFTRunner:
         return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device, run_name)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
-                batch_size: int = 128, device: str = 'cpu', step: int | None = None) -> pd.DataFrame:
+                batch_size: int = 16, device: str = 'cpu', step: int | None = None) -> pd.DataFrame:
         """Rolling-window inference over the test split.
 
         The test period is typically much longer than MAX_PREDICTION_LENGTH, so

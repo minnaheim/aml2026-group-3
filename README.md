@@ -106,7 +106,7 @@ python src/holdout-validation/g_tune_hyperparams.py --target CPI --embedding fom
 # RUN ENTIRE STAGE 2 WITH FOMC-ROBERTA
 python src/holdout-validation/g_tune_hyperparams.py --embedding fomc-roberta --n-trials 20 --all --device cuda
 
-# RUN ENTIRE STAGE 2 WITH FINBERT
+# RUN ENTIRE STAGE e_ WITH FINBERT
 python src/holdout-validation/g_tune_hyperparams.py --embedding finbert --n-trials 20 --all --device cuda
 
 ```
@@ -117,4 +117,11 @@ python src/holdout-validation/g_tune_hyperparams.py --embedding finbert --n-tria
 ```bash
 python src/holdout-validation/h_final_eval.py --tuned --horizon 12 --device cuda
 python src/holdout-validation/h_final_eval.py --tuned --embedding auto --run-name final_emb --horizon 12 --device cuda
+```
+
+## try with long run
+
+```bash
+# try all targets
+python src/holdout-validation/e_main.py --device cuda --horizon 6 --wandb 
 ```
