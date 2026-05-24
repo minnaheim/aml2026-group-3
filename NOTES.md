@@ -104,3 +104,4 @@
 - check waht hyperparams are in the tft paper
 - need more data... pre-train with gdp of different countries, i.e. 
 - else, foundational model?
+- check waht hyperparams are in the tft paper
