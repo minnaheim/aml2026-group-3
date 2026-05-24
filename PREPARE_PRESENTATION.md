@@ -193,6 +193,10 @@ We defined out hyperparameter tuning strategy to work in two steps:
 
 ## Evaluation Protocol
 
+To avoid any look-ahead bias in model selection, we follow a strict two-stage evaluation protocol. In the first stage, we run a three-fold expanding-window cross-validation on the pre-holdout data (1986–2022) to tune hyperparameters and compare models. Each fold adds roughly one block of observations to the training window while the subsequent non-overlapping block serves as the test window. All hyperparameter tuning (architecture search in Stage 1, embedding parameter search in Stage 2) is performed exclusively on these CV folds.
+
+In the second and final stage, we retrain each model — AR, ARIMA, and TFT — on the **entire** pre-holdout period and evaluate on the **true holdout set**: the final 12 months of data (~January 2023 – December 2023). This holdout window is held completely separate throughout and is never used for training, order selection, or hyperparameter tuning. The final evaluation uses the same metrics as the CV stage (MAE, RMSE, and quantile loss for TFT's prediction intervals), and reports one result per model per target. This mirrors standard practice in macroeconomic forecasting where the final evaluation is a clean out-of-sample exercise.
+
 
 # Conclusion and Outlook!
 
