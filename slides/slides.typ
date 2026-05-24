@@ -1,6 +1,7 @@
 #import "template.typ": *
 #import "figures/data_timeline.typ": data-timeline
 #import "figures/metrics_table.typ": metrics-table
+#import "figures/master_table.typ": master-table
 
 #show: presentation
 #set par(leading: 1.2em)
@@ -13,7 +14,7 @@
   // ]
   #text(fill: white, size: 0.8em, weight: "semibold")[
     #v(0.5em)
-    Presented by Minna Heim, Chris Traill and Anna Zeitz
+     Minna Heim, Chris Traill and Anna Zeitz
   ]
 
 
@@ -26,28 +27,49 @@
 
 #slide[
   = Motivation
+   #only("1")[
+  - Macro forecasts matter for
+    - Governments
+    - Financial markets
+    - Central banks
+   ]
+  #only("2-")[
   - Macro forecasts matter for
     - Governments
     - Financial markets
     - *Central banks*
-  #only("2-")[
+   ]
+  #only("3-")[
     - The Federal Reserve (Fed) has a *dual mandate*:
       + Price stability
       + Maximum employment
+  ]
+  #only("4-")[
     - Accurate forecasts of inflation, unemployment, and GDP are crucial for interest rate decisions
   ]
-  #only("3-")[
-    $=>$ Can we do better than standard macro models?
-  ]
+  // #only("5-")[
+  //   $=>$ *Can we do better than standard macro models?*
+  // ]
 ]
-// TODO: no mention of problem setting here, maybe included?
+
+// either this or the above
+#slide[
+  #v(1fr)
+  #align(center)[= Can we do better than standard macro models?]
+  #v(1fr)
+]
+
 #slide[
   = Research Question
+  #only("1-")[
   - The Fed communicates with the public through official statements and speeches
+  ]
+  #only("2-")[
   - It may communicate additional information:
     + *Superior information*: private data and internal models not available to the public
     + *Forward guidance*: signals about future policy to guide market expectations
-  #only("2-")[
+  ]
+  #only("3-")[
     #v(1em)
     $=>$ *Do Fed speeches contain information useful to forecast macroeconomic indicators?*
   ]
@@ -55,13 +77,15 @@
 
 #slide[
   = Data Alignment
-  // #data-timeline
-    #align(center)[
-      #v(2em)
+  #align(center)[
+    #v(2em)
     #box(width: 90%)[
-      #import "figures/data_timeline.typ": 
-      #data-timeline
-
+      #import "figures/data_timeline.typ": data-timeline
+      #only("1")[#data-timeline(step: 1)]
+      #only("2")[#data-timeline(step: 2)]
+      #only("3")[#data-timeline(step: 3)]
+      #only("4")[#data-timeline(step: 4)]
+      #only("5-")[#data-timeline(step: 5)]
     ]
   ]
 ]
@@ -80,14 +104,16 @@
   #let hi-int = rgb("#C96820")  // integration: orange
   #let hi-ma  = rgb("#3A6BB5")  // MA:          blue
 
-  #v(5em)
+  #set text(size: 1.2em)
+  #v(1fr)
   #grid(
-    columns: (15em, 1fr),
+    columns: (10em, 1fr),
     column-gutter: 1.2em,
-    row-gutter: 0.9em,
-    align: (right + horizon, left + horizon),
+    row-gutter: 0.8em,
+    align: (left + horizon, left + horizon),
 
     [AR(p)],[$display(y_t = c + sum_(i=1)^p phi_i y_(t-i) + epsilon_t)$],
+    
 
   // show arima only below?
   [#v(2em)
@@ -114,15 +140,22 @@
       #box(fill: hi-ma, width: 0.7em, height: 0.7em, radius: 0.1em)
       #h(0.2em) MA component: $q$ lags of residuals $epsilon_t$
     ]
+  #v(1fr)
 ]
+
+// more high res
 
 #slide[
   = Temporal Fusion Transformer
   // Add Abbildung from TFT paper here maybe?; then explain it, also saying what variables we use for the static covariates etc; in appendix, list what the actual variables are?
   // if I use AR(IMA) equation, should i use TFT equations too?
     #place(center)[
-    #v(1em)
-    #image("figures/tft-arch.jpg", height: 90%)
+    #v(1fr)
+    #figure(
+    image("figures/tft-arch.jpg", height: 85%),
+    caption: [Model Architecture of the TFT @TFT]
+    )
+    #v(1fr)
   ]
   #speaker-notes[
     based off Transformer, 
@@ -166,15 +199,21 @@
   Speeches are held at *irregular* and *daily* frequency: how to align with monthly horizon?
   #v(0.5em)
 
+  #only("2-")[
   + *Mean aggregation*: unweighted mean over rolling window of $X$ months
+  ]
+  #only("3-")[
   + *Exponential decay*: $w_t = exp(-lambda dot d_t)$ where $d_t$ = days before month $m$
     - More recent speeches receive higher weight
     - $lambda$ treated as fixed; speech window $X$ tuned as hyperparameter
+  ]
+  #only("4-")[
   + *Attention-based*: key = embedding (after dimensionality reduction), query = mean macro state
     - Given current macro conditions, which past speeches are most informative?
-    - Fitted on training data only $=>$ no leakage!
+    - Fitted on training data only $=>$ no leakage!]
   #v(0.5em)
-  All methods also track: voter speech ratio, chair speech ratio, gender share
+  #only("5-")[
+  All methods also track: voter speech ratio, chair speech ratio, gender share]
 
 ]
 
@@ -183,13 +222,17 @@
   // TODO: use hyperparam tuning grid, put it into main part of presentation
   = Hyperparameter Tuning
   Tune in two stages:
+  #only("2-")[
   + *Stage 1: Architecture (Macro-Only TFT)*
     - Bayesian search via Optuna (TPE sampler)
     - 2-fold CV, up to 50 trials
     - Includes: encoder length, hidden size, normalizer
+  ]
+  #only("3-")[
   + *Stage 2: Speech Embedding Params*
     - Architecture fixed from Stage 1
     - Tune: aggregation, reduction, PCA dims, speech window
+]
 ]
 
 
@@ -197,12 +240,14 @@
 #slide[
   = Evaluation Protocol
   - *Walk-forward cross-validation*: expanding window, never use future data
-  - *Metric*: MAE (mean absolute error), RMSE ????
-  ADJUST HERE
+  #only("2-")[
+  - *Metric*: MAE (mean absolute error), RMSE *????*]
+  #only("3-")[
   - *Multi-step forecasting*: predictions in non-overlapping 12-month windows
     - Context: training data + model's own previous predictions
     - Same assumption for AR, ARIMA and TFT $=>$ fair comparison
-  #only("2-")[
+  ]
+  #only("4-")[
     #v(0.5em)
     $=>$ All models evaluated on the same information set
   ]
@@ -210,8 +255,111 @@
 
 #slide[
   #v(1fr)
-  #align(center)[= Results]
+  #align(center)[= Results
+   == Holdout Evaluation]
   #v(1fr)
+]
+
+
+#slide[
+  // vereinheitlichen die legends??
+  = Holdout Predictions ($h$=12)
+  #speaker-notes[
+    step 1: macro-only TFT vs baselines (final_holdout run)
+    step 2: TFT with best per-target embedding (final_emb run)
+  ]
+  #only("1")[
+    #place(center)[
+      #v(1fr)
+      #figure(
+        image("/out/holdout/final_holdout/predictions_vs_actuals_h12_macro.png", height: 88%),
+        caption: [Holdout Predictions $h$=12, Macro Only]
+      )
+      #v(1fr)
+    ]
+  ]
+
+  #only("2")[
+    #place(center)[
+       #v(1fr)
+      #figure(
+      image("/out/holdout/final_emb/predictions_vs_actuals_h12_auto.png", height: 88%),
+      caption: [Holdout Predictions $h$=12, Including Embeddings])
+       #v(1fr)
+    ]
+  ]
+]
+
+#slide[
+  // vereinheitlichen die legends??
+  = Holdout Predictions ($h$=6)
+  #speaker-notes[
+    step 1: macro-only TFT vs baselines (final_holdout run)
+    step 2: TFT with best per-target embedding (final_emb run)
+  ]
+  #only("1")[
+    #place(center)[
+      #v(1fr)
+      #figure(
+        image("/out/holdout/final_holdout/predictions_vs_actuals_h6_macro.png", height: 88%),
+        caption: [Holdout Predictions $h$=6, Macro Only]
+      )
+      #v(1fr)
+    ]
+  ]
+
+  #only("2")[
+    #place(center)[
+       #v(1fr)
+      #figure(
+      image("/out/holdout/final_emb/predictions_vs_actuals_h6_auto.png", height: 88%),
+      caption: [Holdout Predictions $h$=6, Including Embeddings])
+       #v(1fr)
+    ]
+  ]
+]
+
+#slide[
+  // vereinheitlichen die legends??
+  = Holdout Predictions ($h$=3)
+  #speaker-notes[
+    step 1: macro-only TFT vs baselines (final_holdout run)
+    step 2: TFT with best per-target embedding (final_emb run)
+  ]
+  #only("1")[
+    #place(center)[
+      #v(1fr)
+      #figure(
+        image("/out/holdout/final_holdout/predictions_vs_actuals_h3_macro.png", height: 88%),
+        caption: [Holdout Predictions $h$=3, Macro Only]
+      )
+      #v(1fr)
+    ]
+  ]
+
+  #only("2")[
+    #place(center)[
+       #v(1fr)
+      #figure(
+      image("/out/holdout/final_emb/predictions_vs_actuals_h3_auto.png", height: 88%),
+      caption: [Holdout Predictions $h$=3, Including Embeddings])
+       #v(1fr)
+    ]
+  ]
+]
+
+#slide[
+  = Holdout Metrics: All Models & Horizons
+  #speaker-notes[
+    AR / ARIMA: univariate baselines.
+    TFT: macro-only, tuned architecture.
+    TFT+Emb: best per-target embedding from HP tuning.
+    Bold = lowest MAE per (h, target).
+  ]
+  #v(0.4em)
+  #align(center)[
+    #master-table()
+  ]
 ]
 
 #slide[
@@ -229,13 +377,22 @@
 #slide[
   = Future Work
   - Hyperparameter tuning: switch to one stage tuning! Also: context-dependent attention
-  - Try out SSMs for forecasting
+  - Explore New Methods:
+    - use Foundational Model (i.e. TabPFN, TimesFN)
+    - Try out SSMs for forecasting
     - Combine with TFT: replace LSTM with SSM for sequence encoder // better for long-run dependencies, also more targeted for time series data!
   - Add Vintages: use real-time macro data (as available at forecast time) for more realistic evaluation
   - Extend dataset: Working Paper @anna_snb_2026
     - 10,000+ speeches since 1914, continuously updated
 ]
 
+#slide[
+  = Conclusion
+
+  - in terms of parameters: TFT >> ARIMA > AR 
+  - TFT naturally includes uncertainty bounds
+  - etc. 
+]
 
 #slide[
   #bibliography(
@@ -279,7 +436,7 @@
 ]
 
 #slide[
-  = Inspect Data Frame:
+  = Data Frame:
   // titles of vars arent good yet... still need to fix this
   #place(center)[
     #v(2em)
@@ -288,7 +445,7 @@
 ]
 
 #slide[
-  = Inspect Target Vars
+  = Target Vars
   // Gray bands = NBER recessions; CPI and GDP are log-differenced
   #place(center)[
     #v(0.5em)
@@ -343,8 +500,8 @@ Based on your tuning code, here are the two appendix slides filled out:
 typst#slide[
   = Hyperparameter Tuning: Stage 1 Search Space
   Architecture tuned on macro-only TFT (per target × horizon):
-
-  #table(
+// TODO: include total number of trials here and below
+ #table(
     columns: (auto, auto, auto),
     [*Parameter*], [*Type*], [*Range / Values*],
     [Encoder length], [int], [12 – 48],
@@ -384,83 +541,33 @@ typst#slide[
       columns: (auto, auto, auto, auto, auto, auto, auto),
       table.header(
         [], table.cell(colspan: 3)[*FOMC-RoBERTa*], table.cell(colspan: 3)[*FinBERT*],
-        [*Target*], [*h=3*], [*h=6*], [*h=12*], [*h=3*], [*h=6*], [*h=12*],
+        [*Target*], [*$h$=3*], [*$h$=6*], [*$h$=12*], [*$h$=3*], [*$h$=6*], [*$h$=12*],
       ),
       [*CPI*],
-      [Mean \ PCA, n = 21 \ W = 3 \ MAE = 0.001847],
-      [Attention \ FA, n = 10 \ W = 8 \ MAE = 0.001849],
-      [*Attention \ PCA, n = 12\ W = 9 \ MAE = 0.001842*],
-      [*Attention \ FA, n = 20 \ W = 5 \ MAE = 0.001846*],
-      [*Decay \ PCA, n = 23 \ W = 3 \ MAE = 0.001846*],
-      [Mean \ PCA, n = 8 \ W = 7 \ MAE = 0.001847],
+      [Mean \ PCA, $n$ = 21 \ $W$ = 3 \ MAE = 0.001847],
+      [Attention \ FA, $n$ = 10 \ $W$ = 8 \ MAE = 0.001849],
+      [*Attention \ PCA, $n$ = 12\ $W$ = 9 \ MAE = 0.001842*],
+      [*Attention \ FA, $n$ = 20 \ $W$ = 5 \ MAE = 0.001846*],
+      [*Decay \ PCA, $n$ = 23 \ $W$ = 3 \ MAE = 0.001846*],
+      [Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 0.001847],
 
       [*GDP*],
-      [*Mean \ PCA, n = 8 \ W = 7 \ MAE = 0.00154*],
-      [Attention \ FA, n = 12 \ W = 8 \ MAE = 0.00171],
-      [Attention \ FA, n = 5 \ W = 10 \ MAE = 0.00152],
-      [Attention \ FA, n = 6 \ W = 12 \ MAE = 0.00170],
-      [*Attention \ FA, n = 10 \ W = 8 \ MAE = 0.00157*],
-      [*Decay \ PCA, n = 20 \ W = 12 \ MAE = 0.00151*],
+      [*Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 0.00154*],
+      [Attention \ FA, $n$ = 12 \ $W$ = 8 \ MAE = 0.00171],
+      [Attention \ FA, $n$ = 5 \ $W$ = 10 \ MAE = 0.00152],
+      [Attention \ FA, $n$ = 6 \ $W$ = 12 \ MAE = 0.00170],
+      [*Attention \ FA, $n$ = 10 \ $W$ = 8 \ MAE = 0.00157*],
+      [*Decay \ PCA, $n$ = 20 \ $W$ = 12 \ MAE = 0.00151*],
 
       [*UNRATE*],
-      [Decay \ FA, n = 12 \ W = 11 \ MAE = 1.31293],
-      [Attention \ FA, n = 6 \ W = 12 \ MAE = 1.31501],
-      [*Mean \ PCA, n = 8 \ W = 7 \ MAE = 1.11597*],
-      [*Mean \ FA, n = 23 \ W = 5 \ MAE = 1.26152*],
-      [*Mean \ PCA, n = 14 \ W = 4 \ MAE = 1.30896*],
-      [Mean \ PCA, n = 25 \ W = 4 \ MAE = 1.20808],
+      [Decay \ FA, $n$ = 12 \ $W$ = 11 \ MAE = 1.31293],
+      [Attention \ FA, $n$ = 6 \ $W$ = 12 \ MAE = 1.31501],
+      [*Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 1.11597*],
+      [*Mean \ FA, $n$ = 23 \ $W$ = 5 \ MAE = 1.26152*],
+      [*Mean \ PCA, $n$ = 14 \ $W$ = 4 \ MAE = 1.30896*],
+      [Mean \ PCA, $n$ = 25 \ $W$ = 4 \ MAE = 1.20808],
     )]
 
-  where W refers to the speech window size and n to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold.
+  where $$W$$ refers to the speech window size and $$n$$ to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold, and $h$ stands for forecast horizon.
 
-]
-
-#slide[
-  #v(1fr)
-  #align(center)[= Results: In Sample]
-  #v(1fr)
-]
-
-#slide[
-  = Macro Only: h=12 
-  #speaker-notes[
-    ran with `python src/holdout-validation/e_main.py --tuned --wandb --horizon 12` 
-    - h=12
-    - macro only
-    - HP tuned architecture:
-    - targets: all
-  ]
-  #only("1")[
-    #place(center)[
-      #image("/out/holdout/default/predictions_vs_actuals_h12_macro.png")
-  ]
-  ]
-  #only("2")[
-    #v(3em)
-    #place(center)[
-    #metrics-table(path: "../out/holdout/default/metrics_h12_macro.csv")
-    ]
-  ]
-
-]
-#slide[
-  = with Embeddings: h=12 
-  #speaker-notes[
-    ran with `python src/holdout-validation/e_main.py --tuned --wandb --horizon 12` 
-    - h=12
-    - with embeddings
-    - HP tuned architecture + embeddings:
-    - targets: all
-  ]
-  #only("1")[
-    #place(center)[
-    #image("../out/holdout/default/predictions_vs_actuals_h12_auto.png")
-  ]
-  ]
-  #only("2")[
-    #v(3em)
-    #place(center)[
-    #metrics-table(path: "../../out/holdout/default/metrics_h12_auto.csv")
-    ]
-  ]
 ]
