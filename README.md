@@ -116,12 +116,13 @@ python src/holdout-validation/g_tune_hyperparams.py --embedding finbert --n-tria
 
 ```bash
 python src/holdout-validation/h_final_eval.py --tuned --horizon 12 --device cuda
-python src/holdout-validation/h_final_eval.py --tuned --embedding auto --run-name final_emb --horizon 12 --device cuda
+python src/holdout-validation/h_final_eval.py --tuned  v   auto --run-name final_emb --horizon 12 --device cuda
 ```
 
 ## try with long run
 
 ```bash
 # try all targets
+# try with new learning rate
 python src/holdout-validation/e_main.py --device cuda --horizon 6 --wandb 
 ```
