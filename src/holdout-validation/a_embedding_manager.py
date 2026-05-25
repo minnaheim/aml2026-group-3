@@ -35,8 +35,10 @@ _META_COLS = [
 _EMBEDDING_PATHS = {
     "fomc-roberta":       "data/embeddings/fomc-roberta/embeddings_full_mean_full_fomc-roberta.csv.zip",
     "fomc-roberta-kafka": "data/embeddings/fomc-roberta-kafka/embeddings_full_mean_full_fomc-roberta.csv.zip",
+    "fomc-roberta-512":   "data/embeddings/fomc-roberta/embeddings_full_mean_512_fomc-roberta.csv.zip",
     "finbert":            "data/embeddings/finbert/embeddings_full_mean_full_finbert.csv.zip",
     "finbert-kafka":      "data/embeddings/finbert-kafka/embeddings_full_mean_full_finbert.csv.zip",
+    "finbert-512":        "data/embeddings/finbert/embeddings_full_mean_512_finbert.csv.zip",
     "roberta":            "data/embeddings/roberta/embeddings_full_mean_full_roberta.csv.zip",
     "llama3.1":           "data/embeddings/llama3.1/embeddings_full_mean_512_llama3.1.csv.zip",
 }

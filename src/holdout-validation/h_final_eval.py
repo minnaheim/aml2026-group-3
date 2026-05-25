@@ -50,8 +50,15 @@ def main():
     )
     parser.add_argument(
         "--embedding", nargs="?", const="auto", default=None,
-        choices=["auto", "fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", "roberta", "llama3.1"],
+        choices=["auto", "fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", 
+                 "llama3.1", "fomc-roberta-512", "finbert-512"],
         help="Speech embedding (omit = macro-only; flag alone = auto-select best from tuning)",
+    )
+    parser.add_argument(
+        "--tuning-embedding", default=None,
+        choices=["fomc-roberta", "finbert"],
+        help="Which tuning results to load params from (default: same as --embedding). "
+            "Use this for kafka and 512 token ablation: --embedding fomc-roberta-kafka --tuning-embedding fomc-roberta",
     )
     parser.add_argument(
         "--aggregation", default="mean", choices=["mean", "decay", "attention", "context_attention"],
@@ -148,10 +155,14 @@ def main():
     last_aggregation = args.aggregation # as default
     last_embedding = args.embedding or "none" # again, as default
     for target in args.targets:
+        # here: override the embeddings structure for ablation
+        # if we have kafka fomc, we want to use the fomc tuning of course
+        tuning_emb = args.tuning_embedding or args.embedding
         if args.tuned:
             arch_params, emb_params, t_embedding = load_tuned_hparams(
-                root, target, args.embedding, args.horizon
+                root, target, tuning_emb, args.horizon # adjust here for tuning emb
             )
+            t_embedding     = args.embedding # but here: for inference, we want to use the kafka embeddings or so
             t_aggregation   = emb_params.get("aggregation",          args.aggregation)   if emb_params else args.aggregation
             t_reduction     = emb_params.get("reduction",            args.reduction)     if emb_params else args.reduction
             t_n_pca         = emb_params.get("n_pca",                args.n_pca)         if emb_params else args.n_pca
