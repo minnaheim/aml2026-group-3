@@ -1,0 +1,10 @@
+model,target,MAE,RMSE,QuantileLoss,run_name,embedding,aggregation,timestamp
+AR,CPI,0.00218,0.00252,0.00047,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
+ARIMA,CPI,0.00122,0.00146,0.00039,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
+TFT,CPI,0.00263,0.00294,0.00053,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
+AR,GDP,0.005,0.00511,0.00074,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
+ARIMA,GDP,0.005,0.00511,0.00074,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
+TFT,GDP,0.00103,0.00121,0.00061,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
+AR,UNRATE,0.24238,0.3012,0.16754,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
+ARIMA,UNRATE,0.25415,0.31466,0.17226,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
+TFT,UNRATE,2.49129,2.62575,0.93382,final_kafka,fomc-roberta-kafka,attention,2026-05-25 09:33
