@@ -151,6 +151,8 @@ class ARRunner:
                 "pred_lo":   ci[:, 0].astype(float),
                 "pred_hi":   ci[:, 1].astype(float),
                 "target":    target,
+                "step":      np.arange(1, window_size + 1),
+                "window":    start // step,
             }))
 
         return pd.concat(windows, ignore_index=True)
@@ -302,6 +304,8 @@ class ARIMARunner:
                 "pred_lo":   ci[:, 0].astype(float),
                 "pred_hi":   ci[:, 1].astype(float),
                 "target":    target,
+                "step":      np.arange(1, window_size + 1),
+                "window":    start // step,
             }))
 
         return pd.concat(windows, ignore_index=True)

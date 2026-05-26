@@ -382,6 +382,8 @@ class TFTRunner:
                     "pred_lo":   float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.1)]),   # q0.1
                     "pred_hi":   float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.9)]),   # q0.9
                     "target":    target,
+                    "step":      i + 1,        # ← add this
+                    "window":    start // step,
                 })
 
         result_df = pd.DataFrame(all_rows)

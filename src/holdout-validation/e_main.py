@@ -152,7 +152,9 @@ def save_results(results: dict, out_dir: Path, run_name="default", embedding="no
         for fold, target_res in fold_res.items():
             for target, df in target_res.items():
                 df.to_csv(run_dir  / f"{model.lower()}_{target.lower()}_fold{fold}_predictions.csv", index=False)
-                m = compute_metrics(df)
+                # score only steps within the declared horizon so h=3/6/12 are comparable!!
+                df_scored = df[df["step"] <= horizon].copy() if "step" in df.columns else df
+                m = compute_metrics(df_scored)
                 rows.append({"model": model, "fold": fold, "target": target, **m})
 
     metrics_df = pd.DataFrame(rows)[[c for c in ["model", "fold", "target", "MAE_display", "RMSE_display", 
