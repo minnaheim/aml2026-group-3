@@ -49,7 +49,10 @@ python src/holdout-validation/e_main.py --tuned --wandb --horizon 12 --device cu
 
 Single target:
 ```bash
-python src/holdout-validation/e_main.py --target UNRATE --device cpu
+# without embedding
+python src/holdout-validation/e_main.py --target UNRATE --device cuda
+# 
+
 ```
 
 With FOMC speech embeddings:
