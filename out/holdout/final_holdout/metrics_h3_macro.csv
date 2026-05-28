@@ -1,10 +1,10 @@
 model,target,MAE,RMSE,QuantileLoss,run_name,embedding,aggregation,timestamp
-AR,CPI,0.00218,0.00252,0.00044,final_holdout,none,mean,2026-05-24 12:13
-ARIMA,CPI,0.00122,0.00146,0.00035,final_holdout,none,mean,2026-05-24 12:13
-TFT,CPI,0.00209,0.00239,0.00045,final_holdout,none,mean,2026-05-24 12:13
-AR,GDP,0.005,0.00511,0.00074,final_holdout,none,mean,2026-05-24 12:13
-ARIMA,GDP,0.005,0.00511,0.00074,final_holdout,none,mean,2026-05-24 12:13
-TFT,GDP,0.00324,0.00343,0.00076,final_holdout,none,mean,2026-05-24 12:13
-AR,UNRATE,0.24238,0.3012,0.09628,final_holdout,none,mean,2026-05-24 12:13
-ARIMA,UNRATE,0.25415,0.31466,0.09793,final_holdout,none,mean,2026-05-24 12:13
-TFT,UNRATE,0.44346,0.49451,0.08608,final_holdout,none,mean,2026-05-24 12:13
+AR,CPI,0.00218,0.00252,0.00044,final_holdout,none,mean,2026-05-28 15:52
+ARIMA,CPI,0.00122,0.00146,0.00035,final_holdout,none,mean,2026-05-28 15:52
+TFT,CPI,0.0021,0.00239,0.00044,final_holdout,none,mean,2026-05-28 15:52
+AR,GDP,0.005,0.00511,0.00074,final_holdout,none,mean,2026-05-28 15:52
+ARIMA,GDP,0.005,0.00511,0.00074,final_holdout,none,mean,2026-05-28 15:52
+TFT,GDP,0.00297,0.00318,0.00076,final_holdout,none,mean,2026-05-28 15:52
+AR,UNRATE,0.24238,0.3012,0.09628,final_holdout,none,mean,2026-05-28 15:52
+ARIMA,UNRATE,0.25415,0.31466,0.09793,final_holdout,none,mean,2026-05-28 15:52
+TFT,UNRATE,0.17877,0.20819,0.09646,final_holdout,none,mean,2026-05-28 15:52
