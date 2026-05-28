@@ -154,6 +154,7 @@ def main():
     # ── 2. run all models for each target ─────────────────────────────────────
     last_aggregation = args.aggregation # as default
     last_embedding = args.embedding or "none" # again, as default
+    embedding_label = args.embedding or "none"
     for target in args.targets:
         # here: override the embeddings structure for ablation
         # if we have kafka fomc, we want to use the fomc tuning of course
@@ -162,7 +163,7 @@ def main():
             arch_params, emb_params, t_embedding = load_tuned_hparams(
                 root, target, tuning_emb, args.horizon # adjust here for tuning emb
             )
-            t_embedding     = args.embedding # but here: for inference, we want to use the kafka embeddings or so
+            t_embedding = args.embedding if args.embedding != "auto" else t_embedding # but here: for inference, we want to use the kafka embeddings or so
             t_aggregation   = emb_params.get("aggregation",          args.aggregation)   if emb_params else args.aggregation
             t_reduction     = emb_params.get("reduction",            args.reduction)     if emb_params else args.reduction
             t_n_pca         = emb_params.get("n_pca",                args.n_pca)         if emb_params else args.n_pca
@@ -234,11 +235,16 @@ def main():
         )
         results["TFT"]["holdout"][target] = tft_df
         print(f"  → {len(tft_df)} predictions")
+        
+        # also, save variable importance
+        print("\n[TFT – variable importance]")
+        importance_out = out_dir / args.run_name
+        tft_runner.interpret_output(out_dir=importance_out, target=target, embedding_label=embedding_label)
 
     # ── 3. save and plot ──────────────────────────────────────────────────────
     save_results(results, out_dir,
                  run_name=args.run_name,
-                 embedding=last_embedding or "none",
+                 embedding=embedding_label,
                  aggregation=last_aggregation,
                  ablation_mode=False,
                  horizon=args.horizon)
@@ -246,7 +252,7 @@ def main():
     plot_results(results, out_dir,
                  run_name=args.run_name,
                  horizon=args.horizon,
-                 embedding=args.embedding)
+                 embedding=embedding_label)
 
 
 if __name__ == "__main__":

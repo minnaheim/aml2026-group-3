@@ -74,8 +74,7 @@ def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: 
 
     # auto-detect best embedding from tuning dirs when --embedding passed without a value
     if embedding == "auto":
-        macro_raw = _read_raw(tuning_dir / f"macro_only{suffix}" / "best_params.json")
-        best_mae  = macro_raw.get("_best_mae", float("inf"))
+        best_mae  = float("inf")
         best_emb  = None
         if tuning_dir.exists():
             for d in sorted(tuning_dir.iterdir()):  # sorted for determinism
@@ -85,7 +84,7 @@ def load_tuned_hparams(root: Path, target: str, embedding: str | None, horizon: 
                         best_mae = raw["_best_mae"]
                         best_emb = d.name[: -len(suffix)]  # strip _h{horizon} suffix
         embedding = best_emb
-        label = f"'{embedding}' (MAE={best_mae:.6f})" if embedding else f"macro-only (MAE={best_mae:.6f})"
+        label = f"'{embedding}' (MAE={best_mae:.6f})" if embedding else f"no embedding found!"
         print(f"  [tuned] auto-selected embedding: {label}")
 
     # macro-only mode: arch params only, no emb_params

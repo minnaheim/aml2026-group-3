@@ -245,7 +245,7 @@ class TFTRunner:
         self._last_device = device
         return ckpt
 
-    def interpret_output(self, out_dir: Path | None = None) -> dict:
+    def interpret_output(self, out_dir: Path | None = None, target: str = "unknown", embedding_label: str = "none") -> dict:
         """Variable importance + attention from the last trained model.
 
         Prints encoder/decoder/static importance tables.
@@ -287,6 +287,19 @@ class TFTRunner:
             importance_dfs[key] = imp
             print(f"\n  {key.replace('_', ' ')}:")
             print(imp.to_string(index=False))
+            
+        # save to csv
+        if out_dir is not None:
+            out_dir = Path(out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            
+            combined = pd.concat(
+                [imp_df.assign(group=key) for key, imp_df in importance_dfs.items()],
+                ignore_index=True
+            )
+            fname = out_dir / f"var_selection_{target}_h{self.MAX_PREDICTION_LENGTH}_{embedding_label}.csv"
+            combined.to_csv(fname, index=False)
+            print(f"  Saved: {fname}")
 
         return importance_dfs
 
