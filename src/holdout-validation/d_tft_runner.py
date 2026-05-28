@@ -27,7 +27,7 @@ HPARAMS_DEFAULTS = {
     "max_prediction_length":  12,
     "min_encoder_length":     8,
     "patience":               15,
-    "max_epochs":             50,
+    "max_epochs":             100,
     "learning_rate":          0.03,
     "lstm_layers":            2,
     "hidden_size":            6,
