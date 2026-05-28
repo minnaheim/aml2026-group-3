@@ -50,8 +50,15 @@ def main():
     )
     parser.add_argument(
         "--embedding", nargs="?", const="auto", default=None,
-        choices=["auto", "fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", "roberta", "llama3.1"],
+        choices=["auto", "fomc-roberta", "finbert", "finbert-kafka", "fomc-roberta-kafka", 
+                 "llama3.1", "fomc-roberta-512", "finbert-512"],
         help="Speech embedding (omit = macro-only; flag alone = auto-select best from tuning)",
+    )
+    parser.add_argument(
+        "--tuning-embedding", default=None,
+        choices=["fomc-roberta", "finbert"],
+        help="Which tuning results to load params from (default: same as --embedding). "
+            "Use this for kafka and 512 token ablation: --embedding fomc-roberta-kafka --tuning-embedding fomc-roberta",
     )
     parser.add_argument(
         "--aggregation", default="mean", choices=["mean", "decay", "attention", "context_attention"],
@@ -119,7 +126,7 @@ def main():
         "normalizer":             args.normalizer,
     }
 
-    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window)
+    dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window, device = args.device)
     dfb.load_fomc_dissent()
     df  = dfb.process_data()
     # unlike in main, splits egal, only holdout here
@@ -145,11 +152,18 @@ def main():
         results["ARIMA"] = {"holdout": {}}
 
     # ── 2. run all models for each target ─────────────────────────────────────
+    last_aggregation = args.aggregation # as default
+    last_embedding = args.embedding or "none" # again, as default
+    embedding_label = args.embedding or "none"
     for target in args.targets:
+        # here: override the embeddings structure for ablation
+        # if we have kafka fomc, we want to use the fomc tuning of course
+        tuning_emb = args.tuning_embedding or args.embedding
         if args.tuned:
             arch_params, emb_params, t_embedding = load_tuned_hparams(
-                root, target, args.embedding, args.horizon
+                root, target, tuning_emb, args.horizon # adjust here for tuning emb
             )
+            t_embedding = args.embedding if args.embedding != "auto" else t_embedding # but here: for inference, we want to use the kafka embeddings or so
             t_aggregation   = emb_params.get("aggregation",          args.aggregation)   if emb_params else args.aggregation
             t_reduction     = emb_params.get("reduction",            args.reduction)     if emb_params else args.reduction
             t_n_pca         = emb_params.get("n_pca",                args.n_pca)         if emb_params else args.n_pca
@@ -158,6 +172,8 @@ def main():
             print(f"\n[tuned] {target}: embedding={t_embedding}, arch={arch_params}")
             if emb_params:
                 print(f"[tuned] {target}: emb_params={emb_params}")
+            last_aggregation = t_aggregation    
+            last_embedding = t_embedding or "none"
         else:
             t_embedding     = args.embedding
             t_aggregation   = args.aggregation
@@ -168,7 +184,7 @@ def main():
 
         # build embedding-augmented holdout_splits for TFT (AR/ARIMA always use base splits)
         if t_embedding is not None:
-            t_dfb = DataFrameBuilder(str(root), aggregation=t_aggregation, speech_window=t_speech_window)
+            t_dfb = DataFrameBuilder(str(root), aggregation=t_aggregation, speech_window=t_speech_window, device = args.device)
             t_dfb.load_fomc_dissent()
             # reconstruct holdout_splits for this target's dfb (same date boundaries, fresh dfb)
             t_holdout_splits = [{"fold": "holdout", "train": df_cv.copy(), "test": holdout.copy()}]
@@ -219,19 +235,24 @@ def main():
         )
         results["TFT"]["holdout"][target] = tft_df
         print(f"  → {len(tft_df)} predictions")
+        
+        # also, save variable importance
+        print("\n[TFT – variable importance]")
+        importance_out = out_dir / args.run_name
+        tft_runner.interpret_output(out_dir=importance_out, target=target, embedding_label=embedding_label)
 
     # ── 3. save and plot ──────────────────────────────────────────────────────
     save_results(results, out_dir,
                  run_name=args.run_name,
-                 embedding=args.embedding or "none",
-                 aggregation=args.aggregation,
+                 embedding=embedding_label,
+                 aggregation=last_aggregation,
                  ablation_mode=False,
                  horizon=args.horizon)
 
     plot_results(results, out_dir,
                  run_name=args.run_name,
                  horizon=args.horizon,
-                 embedding=args.embedding)
+                 embedding=embedding_label)
 
 
 if __name__ == "__main__":

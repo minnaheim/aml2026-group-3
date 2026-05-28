@@ -245,7 +245,7 @@ class TFTRunner:
         self._last_device = device
         return ckpt
 
-    def interpret_output(self, out_dir: Path | None = None, horizon: int = 12, emb_tag: str = "macro", target: str = "CPI") -> dict:
+    def interpret_output(self, out_dir: Path | None = None, target: str = "unknown", embedding_label: str = "none") -> dict:
         """Variable importance + attention from the last trained model.
 
         Prints encoder/decoder/static importance tables.
@@ -285,20 +285,21 @@ class TFTRunner:
                 .sort_values("importance", ascending=False)
             )
             importance_dfs[key] = imp
-            # print(f"\n  {key.replace('_', ' ')}:")
-            # print(imp.to_string(index=False))
-
-        # save each importance table to its own CSV under out_dir
+            print(f"\n  {key.replace('_', ' ')}:")
+            print(imp.to_string(index=False))
+            
+        # save to csv
         if out_dir is not None:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            run_dir = out_dir / "interpretation"
-            run_dir.mkdir(parents=True, exist_ok=True)
-            target_dir = run_dir / target
-            target_dir.mkdir(parents=True,exist_ok=True)
-            for key, imp_df in importance_dfs.items():
-                inter_path = target_dir / f"tft_interpretation_{key}_h{horizon}_{emb_tag}.csv"
-                imp_df.to_csv(inter_path, index=False)
-                print(f"Interpretation saved → {inter_path}")
+            tar_dir = Path(out_dir) / "interpretation" / f"{target}"
+            tar_dir.mkdir(parents=True, exist_ok=True)
+            
+            combined = pd.concat(
+                [imp_df.assign(group=key) for key, imp_df in importance_dfs.items()],
+                ignore_index=True
+            )
+            fname = tar_dir / f"var_selection_h{self.MAX_PREDICTION_LENGTH}_{embedding_label}.csv"
+            combined.to_csv(fname, index=False)
+            print(f"  Saved: {fname}")
 
         return importance_dfs
 
@@ -394,6 +395,8 @@ class TFTRunner:
                     "pred_lo":   float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.1)]),   # q0.1
                     "pred_hi":   float(preds_np[0, pred_offset + i, self.QUANTILES.index(0.9)]),   # q0.9
                     "target":    target,
+                    "step":      i + 1,        # ← add this
+                    "window":    start // step,
                 })
 
         result_df = pd.DataFrame(all_rows)

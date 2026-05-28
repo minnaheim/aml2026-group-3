@@ -1,10 +1,10 @@
 model,target,MAE,RMSE,QuantileLoss,run_name,embedding,aggregation,timestamp
-AR,CPI,0.00218,0.00252,0.00044,final_emb,auto,mean,2026-05-24 12:22
-ARIMA,CPI,0.00122,0.00146,0.00035,final_emb,auto,mean,2026-05-24 12:22
-TFT,CPI,0.00245,0.00276,0.00044,final_emb,auto,mean,2026-05-24 12:22
-AR,GDP,0.005,0.00511,0.00074,final_emb,auto,mean,2026-05-24 12:22
-ARIMA,GDP,0.005,0.00511,0.00074,final_emb,auto,mean,2026-05-24 12:22
-TFT,GDP,0.00301,0.00324,0.00065,final_emb,auto,mean,2026-05-24 12:22
-AR,UNRATE,0.24238,0.3012,0.09628,final_emb,auto,mean,2026-05-24 12:22
-ARIMA,UNRATE,0.25415,0.31466,0.09793,final_emb,auto,mean,2026-05-24 12:22
-TFT,UNRATE,0.55122,0.57663,0.09607,final_emb,auto,mean,2026-05-24 12:22
+AR,CPI,0.00218,0.00252,0.00044,final_emb,auto,mean,2026-05-28 16:02
+ARIMA,CPI,0.00122,0.00146,0.00035,final_emb,auto,mean,2026-05-28 16:02
+TFT,CPI,0.00239,0.00269,0.00046,final_emb,auto,mean,2026-05-28 16:02
+AR,GDP,0.005,0.00511,0.00074,final_emb,auto,mean,2026-05-28 16:02
+ARIMA,GDP,0.005,0.00511,0.00074,final_emb,auto,mean,2026-05-28 16:02
+TFT,GDP,0.00279,0.00302,0.00058,final_emb,auto,mean,2026-05-28 16:02
+AR,UNRATE,0.24238,0.3012,0.09628,final_emb,auto,mean,2026-05-28 16:02
+ARIMA,UNRATE,0.25415,0.31466,0.09793,final_emb,auto,mean,2026-05-28 16:02
+TFT,UNRATE,0.25455,0.32353,0.08788,final_emb,auto,mean,2026-05-28 16:02
