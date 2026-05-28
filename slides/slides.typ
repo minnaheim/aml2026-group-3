@@ -2,6 +2,7 @@
 #import "figures/data_timeline.typ": data-timeline
 #import "figures/metrics_table.typ": metrics-table
 #import "figures/master_table.typ": master-table
+#import "figures/rel_rmse.typ": relrmse-table
 
 #show: presentation
 #set par(leading: 1.2em)
@@ -55,7 +56,7 @@
 // either this or the above
 #slide[
   #v(1fr)
-  #align(center)[= Can we do better than standard macro models?]
+  #align(center)[= Can we do better than standard Macro Models?]
   #v(1fr)
 ]
 
@@ -186,11 +187,6 @@
     *Dimensionality reduction*: 768 $=>$ $X$ dims via Principal Component Analysis or Factor Analysis
     - $X$ is treated as hyperparameter
   ]
-  // TODO: either we choose to do robustness here, or we remove this and put this to robustness
-  // #only("3-")[
-  // #v(0.5em)
-  // *Robustness*: replace embeddings with Kafka texts $=>$ should add no predictive signal
-  // ]
 ]
 
 #slide[
@@ -219,7 +215,6 @@
 
 
 #slide[
-  // TODO: use hyperparam tuning grid, put it into main part of presentation
   = Hyperparameter Tuning
   Tune in two stages:
   #only("2-")[
@@ -241,7 +236,7 @@
   = Evaluation Protocol
   - *Walk-forward cross-validation*: expanding window, never use future data
   #only("2-")[
-  - *Metric*: MAE (mean absolute error), RMSE *????*]
+  - *Metric*: MAE (mean absolute error), RMSE, and relative RMSE]
   #only("3-")[
   - *Multi-step forecasting*: predictions in non-overlapping 12-month windows
     - Context: training data + model's own previous predictions
@@ -258,6 +253,29 @@
   #align(center)[= Results
    == Holdout Evaluation]
   #v(1fr)
+]
+
+#slide[
+  = Holdout Metrics: All Models & Horizons
+  #speaker-notes[
+    AR / ARIMA: univariate baselines.
+    TFT: macro-only, tuned architecture.
+    TFT+Emb: best per-target embedding from HP tuning.
+    Bold = lowest MAE per (h, target).
+  ]
+  #v(0.4em)
+  #align(center)[
+    #master-table()
+  ]
+]
+
+#slide[
+  = Answering Our Research Question
+
+  #v(0.4em)
+  #align(center)[
+    #relrmse-table()
+  ]
 ]
 
 
@@ -349,25 +367,6 @@
 ]
 
 #slide[
-  = Holdout Metrics: All Models & Horizons
-  #speaker-notes[
-    AR / ARIMA: univariate baselines.
-    TFT: macro-only, tuned architecture.
-    TFT+Emb: best per-target embedding from HP tuning.
-    Bold = lowest MAE per (h, target).
-  ]
-  #v(0.4em)
-  #align(center)[
-    #master-table()
-  ]
-]
-
-#slide[
-  = Results
-  - Incl. Tables, Figures
-]
-
-#slide[
   = Robustness Checks
   - Shuffling Embeddings
   - Using unrelated text (German Texts of Franz Kafka)
@@ -376,9 +375,11 @@
 
 #slide[
   = Future Work
-  - Hyperparameter tuning: switch to one stage tuning! Also: context-dependent attention
+  - Hyperparameter tuning: switch to one stage tuning!
+    - context-dependent attention
+    - only FOMC-speeches
   - Explore New Methods:
-    - use Foundational Model (i.e. TabPFN, TimesFN)
+    - Use Foundational Model (i.e. TabPFN, TimesFN)
     - Try out SSMs for forecasting
     - Combine with TFT: replace LSTM with SSM for sequence encoder // better for long-run dependencies, also more targeted for time series data!
   - Add Vintages: use real-time macro data (as available at forecast time) for more realistic evaluation
@@ -391,7 +392,7 @@
 
   - in terms of parameters: TFT >> ARIMA > AR 
   - TFT naturally includes uncertainty bounds
-  - etc. 
+  - currently speeches mostly add Noise for 2/3 targets 
 ]
 
 #slide[
@@ -420,8 +421,6 @@
   #align(center)[= Appendix]
   #v(1fr)
 ]
-
-// TODO: add slide on data visualisation (to explain why UNRATE vs. CPI, GDP so different in MAE!)
 
 #slide[
   = Variable List: Macroeconomic Variables
@@ -495,24 +494,24 @@
 
 ]
 
-
-Based on your tuning code, here are the two appendix slides filled out:
-typst#slide[
+#slide[
   = Hyperparameter Tuning: Stage 1 Search Space
   Architecture tuned on macro-only TFT (per target × horizon):
-// TODO: include total number of trials here and below
  #table(
-    columns: (auto, auto, auto),
-    [*Parameter*], [*Type*], [*Range / Values*],
-    [Encoder length], [int], [12 – 48],
-    [Hidden size], [categorical], [\{8, 16, 32, 64, 128, 256\}],
-    [Hidden continuous size], [categorical], [\{2, 4, 8, 16\}],
-    [Dropout], [float], [0.05 – 0.55],
-    [Learning rate], [log-uniform], [$10^(-4)$ – 0.15],
-    [Normalizer], [categorical], [\{encoder-none, group\}],
+    columns: (auto, auto, auto, auto),
+    [*Parameter*], [*Type*], [*Range / Values*],[*Nr. of Trials*],
+    [Encoder length], [int], [12 – 48],[20],
+    [Hidden size], [categorical], [\{8, 16, 32, 64, 128, 256\}],[20],
+    [Hidden continuous size], [categorical], [\{2, 4, 8, 16\}], [20],
+    [Dropout], [float], [0.05 – 0.55],[20],
+    [Learning rate], [log-uniform], [$10^(-4)$ – 0.15],[20],
+    [Normalizer], [categorical], [\{encoder-none, group\}],[20],
   )
   #v(0.5em)
-  Fixed: `lstm_layers = 2`, `attention_head_size = 2`, `max_epochs = 50`, `patience = 15`
+  Fixed: 
+  `lstm_layers = 2`, `attention_head_size = 2`, 
+  
+  `max_epochs = 50`, `patience = 15`, `batch_size = 128`
 ]
 
 #slide[
