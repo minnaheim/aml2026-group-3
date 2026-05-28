@@ -1,7 +1,6 @@
 import warnings
 from pathlib import Path
 
-import holidays
 import numpy as np
 import pandas as pd
 import lightning.pytorch as pl
@@ -15,11 +14,10 @@ from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 warnings.filterwarnings("ignore")
 
 MACRO_VARS  = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "AWHMAN", "USACLI", "GDP",
-               # daily vars are mean and std
-               "GBP_mean", "GBP_std", "YEN_mean", "YEN_std", "FFR_mean", "FFR_std",
-               "T10Y2Y_mean", "T10Y2Y_std"]
+               # daily vars: mean only — intra-month std has weak theoretical motivation
+               "GBP_mean", "YEN_mean", "FFR_mean", "T10Y2Y_mean"]
 LAG_VARS    = ["CPI", "PAYEMS", "INDPRO", "UNRATE", "GDP"]
-LAG_PERIODS = [1, 2, 6, 12]
+LAG_PERIODS = [1, 12]
 # same set as benchmark_runner.LOG_DIFF_TARGETS — log only, no differencing for now
 #ANNA# LOG_TARGETS = {"CPI", "PAYEMS", "INDPRO", "GDP"}
 
@@ -74,11 +72,7 @@ class TFTRunner:
         # df[log_cols] = np.log(df[log_cols])
 
         # calendar features — known in advance
-        us_holidays = holidays.US()
-        df['day_of_week']  = df['date'].dt.dayofweek
-        df['week_of_year'] = df['date'].dt.isocalendar().week.astype(int)
-        df['month']        = df['date'].dt.month
-        df['is_holiday']   = df['date'].dt.date.apply(lambda d: int(d in us_holidays))
+        df['month'] = df['date'].dt.month  # only meaningful calendar feature on monthly data
 
         # monthly lags via merge_asof so the offset is in months, not rows
         # (row-based lag is meaningless on ffilled daily data)
@@ -170,7 +164,7 @@ class TFTRunner:
             max_prediction_length=self.hparams["max_prediction_length"],
             static_categoricals=['series_id'] + meta_cat_cols,
             static_reals=meta_real_cols,
-            time_varying_known_reals=['time_idx', 'day_of_week', 'week_of_year', 'month', 'is_holiday',
+            time_varying_known_reals=['time_idx', 'month',
                                       # fomc dates known in advance — only included with speeches
                                       *fomc_known_present],
             time_varying_unknown_reals=[*covariates, *lag_cols, *pca_cols_present, *dissent_cols_present],
@@ -285,8 +279,8 @@ class TFTRunner:
                 .sort_values("importance", ascending=False)
             )
             importance_dfs[key] = imp
-            print(f"\n  {key.replace('_', ' ')}:")
-            print(imp.to_string(index=False))
+            # print(f"\n  {key.replace('_', ' ')}:")
+            # print(imp.to_string(index=False))
             
         # save to csv
         if out_dir is not None:

@@ -330,10 +330,10 @@ def main():
     parser.add_argument("--encoder-length",         type=int,   default=24,   help="max_encoder_length (default 24)")
     parser.add_argument("--speech-window",          type=int,   default=12,   help="SPEECH_WINDOW_MONTHS (default 12)")
     parser.add_argument("--lstm-layers",            type=int,   default=1,    help="TFT lstm_layers (default 4)")
-    parser.add_argument("--hidden-size",            type=int,   default=64,   help="TFT hidden_size (default 64)")
+    parser.add_argument("--hidden-size",            type=int,   default=8,   help="TFT hidden_size (default 64)")
     parser.add_argument("--hidden-continuous-size", type=int,   default=8,    help="TFT hidden_continuous_size (default 8)")
     parser.add_argument("--dropout",                type=float, default=0.2,  help="TFT dropout (default 0.2)")
-    parser.add_argument("--lr",                     type=float, default=10, help="learning rate (default 0.03)")
+    parser.add_argument("--lr",                     type=float, default=0.03, help="learning rate (default 0.03)")
     parser.add_argument(
         "--normalizer", default="encoder_none", choices=["encoder_none", "group"],
         help="Target normalizer: encoder_none = EncoderNormalizer(None), group = GroupNormalizer (default: encoder_none)",
