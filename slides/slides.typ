@@ -3,6 +3,7 @@
 #import "figures/metrics_table.typ": metrics-table
 #import "figures/master_table.typ": master-table
 #import "figures/rel_rmse.typ": relrmse-table
+#import "figures/var_selection.typ": encoder-table, decoder-table, static-table, removal-table
 
 #show: presentation
 #set par(leading: 1.2em)
@@ -569,4 +570,41 @@
 
   where $$W$$ refers to the speech window size and $$n$$ to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold, and $h$ stands for forecast horizon.
 
+]
+
+#slide[
+
+  = Variable Selection
+  #only(1)[
+    // top 10 encoder (time-varying unknown reals)
+    #place(center)[
+    #v(2em)
+    #encoder-table(n: 10, caption: [Top 10 encoder variables, $h=12$], )
+  ]
+    
+  ]
+  #only(2)[
+    // top 10 decoder (time-varying known reals)
+    #place(center)[
+    #v(2em)
+    #decoder-table(n: 10, caption: [Top 10 decoder variables, $h=12$], )
+  ]
+
+  ]
+  #only(3)[
+    // top 10 decoder (time-varying known reals)
+    #place(center)[
+    #v(2em)
+    #static-table(n: 10, caption: [Top 10 static variables, $h=12$], )
+  ]
+
+  ]
+  // TODO: maybe not add this, jsut confusing that CPI is here.
+  // #only(4)[
+  //   // top 10 decoder (time-varying known reals)
+  //   #place(center)[
+  //   #v(2em)
+  //   #removal-table(cutoff: 0.005, caption: [Potential Removal Candidates, $h=12$], )
+  // ]
+  ]
 ]
