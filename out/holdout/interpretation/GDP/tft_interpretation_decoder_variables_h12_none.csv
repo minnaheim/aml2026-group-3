@@ -1,0 +1,10 @@
+variable,importance
+days_to_fomc,0.25708786
+time_idx,0.20961404
+day_of_week,0.16942824
+week_of_year,0.08358637
+is_holiday,0.08165071
+month,0.073657066
+days_since_fomc,0.020934837
+meeting_this_month,0.012852493
+fomc_cycle_pos,0.005564963

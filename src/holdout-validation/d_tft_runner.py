@@ -245,7 +245,7 @@ class TFTRunner:
         self._last_device = device
         return ckpt
 
-    def interpret_output(self, out_dir: Path | None = None) -> dict:
+    def interpret_output(self, out_dir: Path | None = None, horizon: int = 12, emb_tag: str = "macro", target: str = "CPI") -> dict:
         """Variable importance + attention from the last trained model.
 
         Prints encoder/decoder/static importance tables.
@@ -285,8 +285,20 @@ class TFTRunner:
                 .sort_values("importance", ascending=False)
             )
             importance_dfs[key] = imp
-            print(f"\n  {key.replace('_', ' ')}:")
-            print(imp.to_string(index=False))
+            # print(f"\n  {key.replace('_', ' ')}:")
+            # print(imp.to_string(index=False))
+
+        # save each importance table to its own CSV under out_dir
+        if out_dir is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            run_dir = out_dir / "interpretation"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            target_dir = run_dir / target
+            target_dir.mkdir(parents=True,exist_ok=True)
+            for key, imp_df in importance_dfs.items():
+                inter_path = target_dir / f"tft_interpretation_{key}_h{horizon}_{emb_tag}.csv"
+                imp_df.to_csv(inter_path, index=False)
+                print(f"Interpretation saved → {inter_path}")
 
         return importance_dfs
 

@@ -471,8 +471,8 @@ def main():
             )
             print(f"  → best checkpoint: {ckpt}")
 
-            # print("\n[TFT – interpretation]")
-            # interpretation = tft_runner.interpret_output()
+            print("\n[TFT – interpretation]")
+            tft_runner.interpret_output(out_dir=out_dir, horizon=args.horizon, emb_tag=emb_tag, target=target)
             # print(f"interpretation: {interpretation}")
 
             print("\n[TFT – inference]")
