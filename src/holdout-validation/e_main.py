@@ -334,6 +334,7 @@ def main():
     parser.add_argument("--hidden-continuous-size", type=int,   default=8,    help="TFT hidden_continuous_size (default 8)")
     parser.add_argument("--dropout",                type=float, default=0.2,  help="TFT dropout (default 0.2)")
     parser.add_argument("--lr",                     type=float, default=0.03, help="learning rate (default 0.03)")
+    parser.add_argument("--batch_size",             type=float, default=16, help="Batch Size (default 16)")
     parser.add_argument(
         "--normalizer", default="encoder_none", choices=["encoder_none", "group"],
         help="Target normalizer: encoder_none = EncoderNormalizer(None), group = GroupNormalizer (default: encoder_none)",
@@ -372,6 +373,7 @@ def main():
         "hidden_continuous_size": args.hidden_continuous_size,
         "dropout":                args.dropout,
         "learning_rate":          args.lr,
+        "batch_size":             args.batch_size,
         "normalizer":             args.normalizer,
     }
 

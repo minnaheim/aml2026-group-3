@@ -113,7 +113,7 @@ class TFTRunner:
 
         return df
 
-    def create_tft_dataset(self, train_df, target: str, fold, batch_size: int = 16):
+    def create_tft_dataset(self, train_df, target: str, fold):
         """
             Build TimeSeriesDataSet and dataloaders. 
             Target is one of MACRO_VARS.
@@ -176,8 +176,8 @@ class TFTRunner:
         )
 
         validation = TimeSeriesDataSet.from_dataset(training, train_df, predict=True, stop_randomization=True)
-        train_dl   = training.to_dataloader(train=True,  batch_size=batch_size,       num_workers=0)
-        val_dl     = validation.to_dataloader(train=False, batch_size=batch_size * 10, num_workers=0)
+        train_dl   = training.to_dataloader(train=True,  batch_size=self.hparams["batch_size"],       num_workers=0)
+        val_dl     = validation.to_dataloader(train=False, batch_size=self.hparams["batch_size"] * 10, num_workers=0)
 
         return training, train_dl, val_dl
 
@@ -297,7 +297,7 @@ class TFTRunner:
 
         return importance_dfs
 
-    def run(self, splits, target: str, fold: int = 0, batch_size: int = 16,
+    def run(self, splits, target: str, fold: int = 0,
             use_tqdm: bool = True, use_wandb: bool = False, device: str = 'cpu',
             run_name: str = 'tft-holdout') -> str:
         """Full pipeline: augment → dataset → train. Returns best checkpoint path."""
@@ -307,12 +307,12 @@ class TFTRunner:
         print("*************************** columns of the train_df (to check whether embeddings inside) ***************************")
         print(train_df.columns[1:50])
 
-        self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold, batch_size)
+        self._training_ds, train_dl, val_dl = self.create_tft_dataset(train_df, target, fold)
         print("Created TimeSeriesDataSet for tft...")
         return self.train_tft(self._training_ds, train_dl, val_dl, use_tqdm, use_wandb, device, run_name)
 
     def predict(self, checkpoint_path: str, splits, target: str, fold: int = 0,
-                batch_size: int = 16, device: str = 'cpu', step: int | None = None) -> pd.DataFrame:
+             device: str = 'cpu', step: int | None = None) -> pd.DataFrame:
         """Rolling-window inference over the test split.
 
         The test period is typically much longer than MAX_PREDICTION_LENGTH, so
@@ -363,7 +363,7 @@ class TFTRunner:
             pred_ds = TimeSeriesDataSet.from_dataset(
                 training_ds, context_df, predict=True, stop_randomization=True
             )
-            pred_dl = pred_ds.to_dataloader(train=False, batch_size=batch_size, num_workers=0)
+            pred_dl = pred_ds.to_dataloader(train=False, batch_size=self.hparams["batch_size"], num_workers=0)
 
             raw_preds = model.predict(pred_dl, mode="quantiles")  # (1, MAX_PREDICTION_LENGTH)
             if raw_preds.ndim == 3:

@@ -87,8 +87,8 @@ def main():
     # ── TFT hyperparams (CLI overrides; ignored when --tuned is set) ──────────
     parser.add_argument("--encoder-length",         type=int,   default=24)
     parser.add_argument("--speech-window",          type=int,   default=12)
-    parser.add_argument("--lstm-layers",            type=int,   default=4)
-    parser.add_argument("--hidden-size",            type=int,   default=64)
+    parser.add_argument("--lstm-layers",            type=int,   default=1)
+    parser.add_argument("--hidden-size",            type=int,   default=8)
     parser.add_argument("--hidden-continuous-size", type=int,   default=8)
     parser.add_argument("--dropout",                type=float, default=0.2)
     parser.add_argument("--lr",                     type=float, default=0.03)
