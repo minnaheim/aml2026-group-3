@@ -273,7 +273,6 @@
 #slide[
   = Answering Our Research Question
 
-  #v(0.4em)
   #align(center)[
     #relrmse-table()
   ]
@@ -607,4 +606,3 @@
   //   #removal-table(cutoff: 0.005, caption: [Potential Removal Candidates, $h=12$], )
   // ]
   ]
-]

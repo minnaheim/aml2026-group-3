@@ -30,7 +30,7 @@
 
   set text(size: 0.72em)
 
-  table(
+  align(center, table(
     columns: (auto, auto, auto, auto, 0.9em, auto, auto, auto, 0.9em, auto, auto, auto),
     align: (center, right, right, right, center, right, right, right, center, right, right, right),
     stroke: (x, y) => {
@@ -79,5 +79,5 @@
       ([*#h*],) + vals
     }).flatten(),
     table.hline(stroke: 1.5pt),
-  )
+  ))
 }
