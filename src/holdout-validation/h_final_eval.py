@@ -95,6 +95,8 @@ def main():
     parser.add_argument(
         "--normalizer", default="encoder_none", choices=["encoder_none", "group"],
     )
+    parser.add_argument("--batch-size", type=int, default=16,
+                        help="Batch size for TFT dataloaders (default: 16)")
 
     args = parser.parse_args()
 
@@ -124,6 +126,7 @@ def main():
         "dropout":                args.dropout,
         "learning_rate":          args.lr,
         "normalizer":             args.normalizer,
+        "batch_size":             args.batch_size,
     }
 
     dfb = DataFrameBuilder(str(root), aggregation=args.aggregation, speech_window=args.speech_window, device = args.device)
