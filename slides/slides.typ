@@ -2,6 +2,7 @@
 #import "figures/data_timeline.typ": data-timeline
 #import "figures/metrics_table.typ": metrics-table
 #import "figures/master_table.typ": master-table
+#import "figures/robustness_kafka.typ": robustness-kafka
 #import "figures/rel_rmse.typ": relrmse-table
 #import "figures/var_selection.typ": encoder-table, decoder-table, static-table, removal-table
 
@@ -79,17 +80,25 @@
 
 #slide[
   = Data Alignment
-  #align(center)[
-    #v(2em)
-    #box(width: 90%)[
-      #import "figures/data_timeline.typ": data-timeline
-      #only("1")[#data-timeline(step: 1)]
-      #only("2")[#data-timeline(step: 2)]
-      #only("3")[#data-timeline(step: 3)]
-      #only("4")[#data-timeline(step: 4)]
-      #only("5-")[#data-timeline(step: 5)]
+#align(center)[
+  #v(2em)
+  #box(width: 90%)[
+    #import "figures/data_timeline.typ": data-timeline
+    #only("1")[#data-timeline(step: 1)]
+    #only("2")[#data-timeline(step: 2)]
+    #only("3")[#data-timeline(step: 3)]
+    #only("4")[#data-timeline(step: 4)]
+    #only("5-")[
+      #figure(
+        data-timeline(step: 5),
+        caption: [Data alignment pipeline.],
+      )
     ]
   ]
+]
+#only("5-")[
+  Speeches are taken from #cite(<CampiglioDeyrisRomelliScalisi2023>, form: "prose") over period $1986-2023$.
+]
 ]
 
 #slide[
@@ -241,7 +250,7 @@
   #only("3-")[
   - *Multi-step forecasting*: predictions in non-overlapping 12-month windows
     - Context: training data + model's own previous predictions
-    - Same assumption for AR, ARIMA and TFT $=>$ fair comparison
+    - Same assumption for AR, ARIMA and TFT
   ]
   #only("4-")[
     #v(0.5em)
@@ -265,18 +274,22 @@
     Bold = lowest MAE per (h, target).
   ]
   #v(0.4em)
-  #align(center)[
-    #master-table()
-  ]
+#figure(
+  master-table(),
+  caption: [Main Results. Bold = lowest MAE and RMSE per (horizon, target).],
+  kind: table,
+)
 ]
 
 #slide[
   = Answering Our Research Question
-
-  #align(center)[
-    #relrmse-table()
-  ]
+#figure(
+    relrmse-table(),
+  caption: [Relative RMSE. Bold if TFT with Embeddings better than TFT, per (horizon, target).],
+  kind: table,
+)
 ]
+
 
 
 #slide[
@@ -307,6 +320,239 @@
     ]
   ]
 ]
+
+
+#slide[
+  = Robustness Checks
+  - Using unrelated text (German Texts of Franz Kafka)
+  - Use only first 512 tokens of speech
+  $=>$ *Mixed results*: e.g., better than TFT + Emb. at CPI, h = 3 but worse at CPI, h = 6
+  $=>$ More details: Table 9 in Appendix
+]
+
+#slide[
+  = Future Work
+  - Hyperparameter tuning: switch to one stage tuning!
+    - Context-dependent attention
+    - Only FOMC speeches
+  - Explore New Methods:
+    - Try out SSMs for forecasting
+    - Combine with TFT: replace LSTM with SSM for sequence encoder // better for long-run dependencies, also more targeted for time series data!
+  - Add vintages: use real-time macro data (as available at forecast time) for more realistic evaluation
+  - Extend dataset: Working Paper @anna_snb_2026
+    - 10,000+ speeches since 1914, continuously updated
+]
+
+#slide[
+  = Conclusion
+
+  - AR and ARIMA dominate CPI and UNRATE
+  - TFT great for GDP forecasts
+  - TFT naturally includes uncertainty bounds
+  *$=>$ Speeches improve TFT forecasts at medium horizon length*
+  #only("2-")[
+  - But: not necessarily due to speech content but due to more stable TFT 
+  ]
+  #only("3-")[
+    *$=>$ Conclusion: we struggle to beat statistical benchmarks*
+  ]
+]
+
+#slide[
+  #set text(size: 0.8em)
+  #bibliography(
+    "bibliography.bib",
+    style: "apa",
+  )
+]
+
+
+// save the last main slide number
+#let main-slides = toolbox.last-slide-number
+
+#set page(footer: context [
+  #place(bottom + right)[
+    #pad(bottom: 1.5em)[
+      #text(size: 0.8em)[
+        *#toolbox.slide-number* / #main-slides #text(fill: gray)[ | Appendix]
+      ]
+    ]
+  ]
+])
+
+#slide[
+  #v(1fr)
+  #align(center)[= Appendix]
+  #v(1fr)
+]
+
+#slide[
+  = Variable List: Macroeconomic Variables
+  + *Target variables*
+    - CPI, UNRATE, GDP (quarterly: forward-fill missing months) $=>$ AR and ARIMA only take targets
+  + *Covariates*
+    - Monthly variables: payroll (PAYEMS), industrial production (INDPRO), hours worked in manufacturing (AWHMAN), OECD composite leading indicator (USACLI)
+    - Weekly / daily variables: exchange rates (GBP, YEN), effective federal funds rate (FFR), Fed balance sheet (WALCL)
+      - Higher-frequency variables: take mean *and* std per month (volatility)
+    - Lags at 1, 2, 6, 12 months for all target variables
+  + *Preprocessing*: log-difference of CPI, GDP, PAYEMS, INDPRO, AWHMAN
+]
+
+#slide[
+  = Data Frame:
+  // titles of vars arent good yet... still need to fix this
+  #place(center)[
+    #v(2em)
+    #figure(
+      image("figures/df_head.png", width: 100%),
+      caption: [Head of the main data frame])
+  ]
+]
+
+#slide[
+  = Target Vars
+  // Gray bands = NBER recessions; CPI and GDP are log-differenced
+  #place(center)[
+    #v(0.5em)
+    #figure(
+    image("figures/target_vars.png", width: 65%),
+    caption: [Time series of the target variables])
+  ]
+]
+
+#slide[
+  = Variable List
+  The TFT takes four different types of variables:
+
+  + *Static categoricals*: time-invariant, categorical
+    - Identifier and frequency of each time series
+  + *Static reals*: time-invariant, continuous
+    - Number downloads time series from FRED, how long time series has existed
+  + *Time-Varying Known Reals*: time-varying, known
+    - Day of week, month, year; if day is holiday
+    - FOMC Meeting dates
+  + *Time-Varying Unknown Reals*: time-varying, unknown
+    - Macroeconomic variables, speech embeddings, FOMC dissents
+
+]
+
+#slide[
+  = TFT: Input Types
+  // cite paper here?
+  #place(center)[
+    #v(1em)
+    #figure(
+    image("figures/tft-inputs.png", height: 80%),
+    caption: [Temporal Fusion Transformer: Input Types])
+  ]
+]
+
+
+#slide[
+  = Dimensionality Reduction
+
+  FinBERT and FOMC-RoBERTa embeddings are of dimension $768$ per speech
+
+  $=>$ Dimensionality reduction needed for TFT input
+
+  We test two methods (number of components $X$ is hyperparameter, fit only on training data):
+  + *PCA*: projects embeddings onto $X$ principal components
+    - 20 components $approx$ 80% of variance explained
+  + *Factor Analysis (FA)*: models embeddings as linear combination of $X$ latent factors
+    - Unlike PCA: explicitly models noise, focuses on *shared* variance
+    - Parameters estimated via EM algorithm
+
+]
+
+#slide[
+  = Hyperparameter Tuning: Stage 1 Search Space
+  Architecture tuned on macro-only TFT (per target × horizon):
+ #figure(
+  table(
+    columns: (auto, auto, auto, auto),
+    [*Parameter*], [*Type*], [*Range / Values*],[*Nr. of Trials*],
+    [Encoder length], [int], [12 – 48],[20],
+    [Hidden size], [categorical], [\{8, 16, 32, 64, 128, 256\}],[20],
+    [Hidden continuous size], [categorical], [\{2, 4, 8, 16\}], [20],
+    [Dropout], [float], [0.05 – 0.55],[20],
+    [Learning rate], [log-uniform], [$10^(-4)$ – 0.15],[20],
+    [Normalizer], [categorical], [\{encoder-none, group\}],[20],
+  ),
+  caption: [Stage 1: Hyperparameter search space and number of trials.],
+  kind: table,
+)
+  #v(0.5em)
+  Fixed: 
+  `lstm_layers = 2`, `attention_head_size = 2`, 
+  
+  `max_epochs = 50`, `patience = 15`, `batch_size = 128`
+]
+
+#slide[
+  = Hyperparameter Tuning: Stage 2 Search Space
+  Speech embedding params tuned (architecture fixed from Stage 1):
+
+#figure(
+  table(
+    columns: (auto, auto, auto),
+    [*Parameter*], [*Type*], [*Range / Values*],
+    [Aggregation], [categorical], [\{mean, decay, attention\}],
+    [Reduction], [categorical], [\{pca, fa\}],
+    [PCA components ($X$)], [int], [5 – 30],
+    [Speech window (months)], [int], [3 – 12],
+  ),
+  caption: [Stage 2: Hyperparameter search space and number of trials.],
+  kind: table,
+)
+  #v(0.5em)
+  Tuned separately for each of 9 combinations: \{CPI, GDP, UNRATE\} $times$ \{3, 6, 12\} months
+]
+
+
+#slide[
+  = Hyperparameter Tuning: Stage 2 -- Optimal Hyperparameters
+  #block[
+    #set text(size: 14pt)
+    #set par(leading: 0.3em)
+    #figure(
+      table(
+      columns: (auto, auto, auto, auto, auto, auto, auto),
+      table.header(
+        [], table.cell(colspan: 3)[*FOMC-RoBERTa*], table.cell(colspan: 3)[*FinBERT*],
+        [*Target*], [*$h$=3*], [*$h$=6*], [*$h$=12*], [*$h$=3*], [*$h$=6*], [*$h$=12*],
+      ),
+      [*CPI*],
+      [Mean \ PCA, $n$ = 21 \ $W$ = 3 \ MAE = 0.001847],
+      [Attention \ FA, $n$ = 10 \ $W$ = 8 \ MAE = 0.001849],
+      [*Attention \ PCA, $n$ = 12\ $W$ = 9 \ MAE = 0.001842*],
+      [*Attention \ FA, $n$ = 20 \ $W$ = 5 \ MAE = 0.001846*],
+      [*Decay \ PCA, $n$ = 23 \ $W$ = 3 \ MAE = 0.001846*],
+      [Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 0.001847],
+
+      [*GDP*],
+      [*Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 0.00154*],
+      [Attention \ FA, $n$ = 12 \ $W$ = 8 \ MAE = 0.00171],
+      [Attention \ FA, $n$ = 5 \ $W$ = 10 \ MAE = 0.00152],
+      [Attention \ FA, $n$ = 6 \ $W$ = 12 \ MAE = 0.00170],
+      [*Attention \ FA, $n$ = 10 \ $W$ = 8 \ MAE = 0.00157*],
+      [*Decay \ PCA, $n$ = 20 \ $W$ = 12 \ MAE = 0.00151*],
+
+      [*UNRATE*],
+      [Decay \ FA, $n$ = 12 \ $W$ = 11 \ MAE = 1.31293],
+      [Attention \ FA, $n$ = 6 \ $W$ = 12 \ MAE = 1.31501],
+      [*Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 1.11597*],
+      [*Mean \ FA, $n$ = 23 \ $W$ = 5 \ MAE = 1.26152*],
+      [*Mean \ PCA, $n$ = 14 \ $W$ = 4 \ MAE = 1.30896*],
+      [Mean \ PCA, $n$ = 25 \ $W$ = 4 \ MAE = 1.20808],
+    ),
+  caption: [Stage 2: Optimal hyperparameters per (target, horizon).],
+  kind: table,
+)]
+
+  where $$W$$ refers to the speech window size and $$n$$ to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold, and $h$ stands for forecast horizon.
+
+]
+
 
 #slide[
   // vereinheitlichen die legends??
@@ -367,211 +613,6 @@
 ]
 
 #slide[
-  = Robustness Checks
-  - Shuffling Embeddings
-  - Using unrelated text (German Texts of Franz Kafka)
-  - Use not full speech but only first 512 tokens of speech???
-]
-
-#slide[
-  = Future Work
-  - Hyperparameter tuning: switch to one stage tuning!
-    - context-dependent attention
-    - only FOMC-speeches
-  - Explore New Methods:
-    - Use Foundational Model (i.e. TabPFN, TimesFN)
-    - Try out SSMs for forecasting
-    - Combine with TFT: replace LSTM with SSM for sequence encoder // better for long-run dependencies, also more targeted for time series data!
-  - Add Vintages: use real-time macro data (as available at forecast time) for more realistic evaluation
-  - Extend dataset: Working Paper @anna_snb_2026
-    - 10,000+ speeches since 1914, continuously updated
-]
-
-#slide[
-  = Conclusion
-
-  - in terms of parameters: TFT >> ARIMA > AR 
-  - TFT naturally includes uncertainty bounds
-  - currently speeches mostly add Noise for 2/3 targets 
-]
-
-#slide[
-  #bibliography(
-    "bibliography.bib",
-    style: "apa",
-  )
-]
-
-
-// save the last main slide number
-#let main-slides = toolbox.last-slide-number
-
-#set page(footer: context [
-  #place(bottom + right)[
-    #pad(bottom: 1.5em)[
-      #text(size: 0.8em)[
-        *#toolbox.slide-number* / #main-slides #text(fill: gray)[ | Appendix]
-      ]
-    ]
-  ]
-])
-
-#slide[
-  #v(1fr)
-  #align(center)[= Appendix]
-  #v(1fr)
-]
-
-#slide[
-  = Variable List: Macroeconomic Variables
-  + *Target variables*
-    - CPI, UNRATE, GDP (quarterly: forward-fill missing months) $=>$ AR and ARIMA only take targets
-  + *Covariates*
-    - Monthly variables: payroll (PAYEMS), industrial production (INDPRO), hours worked in manufacturing (AWHMAN), OECD composite leading indicator (USACLI)
-    - Weekly / daily variables: exchange rates (GBP, YEN), effective federal funds rate (FFR), Fed balance sheet (WALCL)
-      - Higher-frequency variables: take mean *and* std per month (volatility)
-    - Lags at 1, 2, 6, 12 months for all target variables
-  + *Preprocessing*: log-difference of CPI, GDP, PAYEMS, INDPRO, AWHMAN
-]
-
-#slide[
-  = Data Frame:
-  // titles of vars arent good yet... still need to fix this
-  #place(center)[
-    #v(2em)
-    #image("figures/df_head.png", width: 100%)
-  ]
-]
-
-#slide[
-  = Target Vars
-  // Gray bands = NBER recessions; CPI and GDP are log-differenced
-  #place(center)[
-    #v(0.5em)
-    #image("figures/target_vars.png", width: 65%)
-  ]
-]
-
-#slide[
-  = Variable List
-  The TFT takes four different types of variables:
-
-  + *Static categoricals*: time-invariant, categorical
-    - Identifier and frequency of each time series
-  + *Static reals*: time-invariant, continuous
-    - Number downloads time series from FRED, how long time series has existed
-  + *Time-Varying Known Reals*: time-varying, known
-    - Day of week, month, year; if day is holiday
-    - FOMC Meeting dates
-  + *Time-Varying Unknown Reals*: time-varying, unknown
-    - Macroeconomic variables, speech embeddings, FOMC dissents
-
-]
-
-#slide[
-  = TFT: Input Types
-  // cite paper here?
-  #place(center)[
-    #v(1em)
-    #image("figures/tft-inputs.png", height: 80%)
-  ]
-]
-
-
-#slide[
-  = Dimensionality Reduction
-
-  FinBERT and FOMC-RoBERTa embeddings are of dimension $768$ per speech
-
-  $=>$ Dimensionality reduction needed for TFT input
-
-  We test two methods (number of components $X$ is hyperparameter, fit only on training data):
-  + *PCA*: projects embeddings onto $X$ principal components
-    - 20 components $approx$ 80% of variance explained
-  + *Factor Analysis (FA)*: models embeddings as linear combination of $X$ latent factors
-    - Unlike PCA: explicitly models noise, focuses on *shared* variance
-    - Parameters estimated via EM algorithm
-
-]
-
-#slide[
-  = Hyperparameter Tuning: Stage 1 Search Space
-  Architecture tuned on macro-only TFT (per target × horizon):
- #table(
-    columns: (auto, auto, auto, auto),
-    [*Parameter*], [*Type*], [*Range / Values*],[*Nr. of Trials*],
-    [Encoder length], [int], [12 – 48],[20],
-    [Hidden size], [categorical], [\{8, 16, 32, 64, 128, 256\}],[20],
-    [Hidden continuous size], [categorical], [\{2, 4, 8, 16\}], [20],
-    [Dropout], [float], [0.05 – 0.55],[20],
-    [Learning rate], [log-uniform], [$10^(-4)$ – 0.15],[20],
-    [Normalizer], [categorical], [\{encoder-none, group\}],[20],
-  )
-  #v(0.5em)
-  Fixed: 
-  `lstm_layers = 2`, `attention_head_size = 2`, 
-  
-  `max_epochs = 50`, `patience = 15`, `batch_size = 128`
-]
-
-#slide[
-  = Hyperparameter Tuning: Stage 2 Search Space
-  Speech embedding params tuned (architecture fixed from Stage 1):
-
-  #table(
-    columns: (auto, auto, auto),
-    [*Parameter*], [*Type*], [*Range / Values*],
-    [Aggregation], [categorical], [\{mean, decay, attention\}],
-    [Reduction], [categorical], [\{pca, fa\}],
-    [PCA components ($X$)], [int], [5 – 30],
-    [Speech window (months)], [int], [3 – 12],
-  )
-  #v(0.5em)
-  Tuned separately for each of 9 combinations: \{CPI, GDP, UNRATE\} $times$ \{3, 6, 12\} months
-]
-
-
-#slide[
-  = Hyperparameter Tuning: Stage 2 -- Optimal Hyperparameters
-  #block[
-    #set text(size: 14.5pt)
-    #set par(leading: 0.3em)
-    #table(
-      columns: (auto, auto, auto, auto, auto, auto, auto),
-      table.header(
-        [], table.cell(colspan: 3)[*FOMC-RoBERTa*], table.cell(colspan: 3)[*FinBERT*],
-        [*Target*], [*$h$=3*], [*$h$=6*], [*$h$=12*], [*$h$=3*], [*$h$=6*], [*$h$=12*],
-      ),
-      [*CPI*],
-      [Mean \ PCA, $n$ = 21 \ $W$ = 3 \ MAE = 0.001847],
-      [Attention \ FA, $n$ = 10 \ $W$ = 8 \ MAE = 0.001849],
-      [*Attention \ PCA, $n$ = 12\ $W$ = 9 \ MAE = 0.001842*],
-      [*Attention \ FA, $n$ = 20 \ $W$ = 5 \ MAE = 0.001846*],
-      [*Decay \ PCA, $n$ = 23 \ $W$ = 3 \ MAE = 0.001846*],
-      [Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 0.001847],
-
-      [*GDP*],
-      [*Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 0.00154*],
-      [Attention \ FA, $n$ = 12 \ $W$ = 8 \ MAE = 0.00171],
-      [Attention \ FA, $n$ = 5 \ $W$ = 10 \ MAE = 0.00152],
-      [Attention \ FA, $n$ = 6 \ $W$ = 12 \ MAE = 0.00170],
-      [*Attention \ FA, $n$ = 10 \ $W$ = 8 \ MAE = 0.00157*],
-      [*Decay \ PCA, $n$ = 20 \ $W$ = 12 \ MAE = 0.00151*],
-
-      [*UNRATE*],
-      [Decay \ FA, $n$ = 12 \ $W$ = 11 \ MAE = 1.31293],
-      [Attention \ FA, $n$ = 6 \ $W$ = 12 \ MAE = 1.31501],
-      [*Mean \ PCA, $n$ = 8 \ $W$ = 7 \ MAE = 1.11597*],
-      [*Mean \ FA, $n$ = 23 \ $W$ = 5 \ MAE = 1.26152*],
-      [*Mean \ PCA, $n$ = 14 \ $W$ = 4 \ MAE = 1.30896*],
-      [Mean \ PCA, $n$ = 25 \ $W$ = 4 \ MAE = 1.20808],
-    )]
-
-  where $$W$$ refers to the speech window size and $$n$$ to the optimal number of components for the dimensionality reduction. The best result per target$times$horizon is shown in bold, and $h$ stands for forecast horizon.
-
-]
-
-#slide[
 
   = Variable Selection
   #only(1)[
@@ -606,3 +647,12 @@
   //   #removal-table(cutoff: 0.005, caption: [Potential Removal Candidates, $h=12$], )
   // ]
   ]
+  #slide[
+  = Holdout Metrics: Robustness
+  #set text(size: 0.8em)
+#figure(
+  robustness-kafka(),
+  caption: [Robustness with Kafka and first 512 tokens embeddings. Bold = lowest MAE and RMSE per (horizon, target).],
+  kind: table,
+)
+]
