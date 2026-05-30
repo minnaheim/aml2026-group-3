@@ -296,10 +296,9 @@
 ]
 
 
-
 #slide[
   // vereinheitlichen die legends??
-  = Holdout Predictions ($h$=12)
+  = Holdout Predictions ($h$=3)
   #speaker-notes[
     step 1: macro-only TFT vs baselines (final_holdout run)
     step 2: TFT with best per-target embedding (final_emb run)
@@ -308,8 +307,8 @@
     #place(center)[
       #v(1fr)
       #figure(
-        image("/out/holdout/final_holdout/predictions_vs_actuals_h12_macro.png", height: 88%),
-        caption: [Holdout Predictions $h$=12, Macro Only]
+        image("/out/holdout/final_holdout/predictions_vs_actuals_h3_macro.png", height: 88%),
+        caption: [Holdout Predictions $h$=3, Macro Only]
       )
       #v(1fr)
     ]
@@ -319,12 +318,13 @@
     #place(center)[
        #v(1fr)
       #figure(
-      image("/out/holdout/final_emb/predictions_vs_actuals_h12_auto.png", height: 88%),
-      caption: [Holdout Predictions $h$=12, Including Embeddings])
+      image("/out/holdout/final_emb/predictions_vs_actuals_h3_auto.png", height: 88%),
+      caption: [Holdout Predictions $h$=3, Including Embeddings])
        #v(1fr)
     ]
   ]
 ]
+
 
 
 #slide[
@@ -560,6 +560,37 @@
 
 #slide[
   // vereinheitlichen die legends??
+  = Holdout Predictions ($h$=12)
+  #speaker-notes[
+    step 1: macro-only TFT vs baselines (final_holdout run)
+    step 2: TFT with best per-target embedding (final_emb run)
+  ]
+  #only("1")[
+    #place(center)[
+      #v(1fr)
+      #figure(
+        image("/out/holdout/final_holdout/predictions_vs_actuals_h12_macro.png", height: 88%),
+        caption: [Holdout Predictions $h$=12, Macro Only]
+      )
+      #v(1fr)
+    ]
+  ]
+
+  #only("2")[
+    #place(center)[
+       #v(1fr)
+      #figure(
+      image("/out/holdout/final_emb/predictions_vs_actuals_h12_auto.png", height: 88%),
+      caption: [Holdout Predictions $h$=12, Including Embeddings])
+       #v(1fr)
+    ]
+  ]
+]
+
+
+
+#slide[
+  // vereinheitlichen die legends??
   = Holdout Predictions ($h$=6)
   #speaker-notes[
     step 1: macro-only TFT vs baselines (final_holdout run)
@@ -582,35 +613,6 @@
       #figure(
       image("/out/holdout/final_emb/predictions_vs_actuals_h6_auto.png", height: 88%),
       caption: [Holdout Predictions $h$=6, Including Embeddings])
-       #v(1fr)
-    ]
-  ]
-]
-
-#slide[
-  // vereinheitlichen die legends??
-  = Holdout Predictions ($h$=3)
-  #speaker-notes[
-    step 1: macro-only TFT vs baselines (final_holdout run)
-    step 2: TFT with best per-target embedding (final_emb run)
-  ]
-  #only("1")[
-    #place(center)[
-      #v(1fr)
-      #figure(
-        image("/out/holdout/final_holdout/predictions_vs_actuals_h3_macro.png", height: 88%),
-        caption: [Holdout Predictions $h$=3, Macro Only]
-      )
-      #v(1fr)
-    ]
-  ]
-
-  #only("2")[
-    #place(center)[
-       #v(1fr)
-      #figure(
-      image("/out/holdout/final_emb/predictions_vs_actuals_h3_auto.png", height: 88%),
-      caption: [Holdout Predictions $h$=3, Including Embeddings])
        #v(1fr)
     ]
   ]
@@ -653,7 +655,7 @@
   ]
   #slide[
   = Holdout Metrics: Robustness
-  #set text(size: 0.8em)
+  #set text(size: 0.75em)
 #figure(
   robustness-kafka(),
   caption: [Robustness: Kafka and 512-token embeddings. Bold = lowest value per metric and (horizon, target).],
