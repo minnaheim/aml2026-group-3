@@ -157,7 +157,7 @@
 // more high res
 
 #slide[
-  = Temporal Fusion Transformer
+  = Temporal Fusion Transformer (TFT)
   // Add Abbildung from TFT paper here maybe?; then explain it, also saying what variables we use for the static covariates etc; in appendix, list what the actual variables are?
   // if I use AR(IMA) equation, should i use TFT equations too?
     #place(center)[
@@ -173,6 +173,7 @@
     not only past inputs, but static metadata, known future inputs (any additional information that helps forecasts)
     -> static enrichment?
     -> Masked Interpretable MHA?
+    - Also great: gives out quantile loss, so basically, uncertainty bounds
   ]
 ]
 
@@ -187,7 +188,7 @@
 #slide[
   = Speech Embeddings
   Two models chosen for complementary perspectives:
-  + *FinBERT*: BERT-based, pre-trained on financial statements @yang2020finbertpretrainedlanguagemodel
+  + *FinBERT*: BERT-based, pre-trained on financial communications @yang2020finbertpretrainedlanguagemodel
   + *FOMC-RoBERTa*: fine-tuned on FOMC data, hawkish/dovish classification @fomc_roberta_paper
   #only("2-")[
     #v(0.5em)
@@ -244,6 +245,10 @@
 
 #slide[
   = Evaluation Protocol
+  #speaker-notes[
+  Point forecasts (MAE and RMSE) use the median quantile (q=0.5) from the quantile loss output.
+]
+
   - *Walk-forward cross-validation*: expanding window, never use future data
   #only("2-")[
   - *Metric*: MAE (mean absolute error), RMSE, and relative RMSE]
@@ -271,12 +276,12 @@
     AR / ARIMA: univariate baselines.
     TFT: macro-only, tuned architecture.
     TFT+Emb: best per-target embedding from HP tuning.
-    Bold = lowest MAE per (h, target).
+    Bold = lowest value per metric and (h, target).
   ]
   #v(0.4em)
 #figure(
   master-table(),
-  caption: [Main Results. Bold = lowest MAE and RMSE per (horizon, target).],
+  caption: [Main Results. Bold = lowest value per metric and (horizon, target).],
   kind: table,
 )
 ]
@@ -326,13 +331,13 @@
   = Robustness Checks
   - Using unrelated text (German Texts of Franz Kafka)
   - Use only first 512 tokens of speech
-  $=>$ *Mixed results*: e.g., better than TFT + Emb. at CPI, h = 3 but worse at CPI, h = 6
+  $=>$ *Mixed results*: e.g., comparable / better than TFT + Emb. at CPI, h = 3 but worse at CPI, h = 6
   $=>$ More details: Table 9 in Appendix
 ]
 
 #slide[
   = Future Work
-  - Hyperparameter tuning: switch to one stage tuning!
+  - Hyperparameter tuning: switch to one stage tuning
     - Context-dependent attention
     - Only FOMC speeches
   - Explore New Methods:
@@ -348,7 +353,6 @@
 
   - AR and ARIMA dominate CPI and UNRATE
   - TFT great for GDP forecasts
-  - TFT naturally includes uncertainty bounds
   *$=>$ Speeches improve TFT forecasts at medium horizon length*
   #only("2-")[
   - But: not necessarily due to speech content but due to more stable TFT 
@@ -652,7 +656,7 @@
   #set text(size: 0.8em)
 #figure(
   robustness-kafka(),
-  caption: [Robustness with Kafka and first 512 tokens embeddings. Bold = lowest MAE and RMSE per (horizon, target).],
+  caption: [Robustness: Kafka and 512-token embeddings. Bold = lowest value per metric and (horizon, target).],
   kind: table,
 )
 ]
